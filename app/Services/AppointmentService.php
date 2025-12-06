@@ -1,0 +1,297 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Appointment;
+use App\Models\Staff;
+use Carbon\Carbon;
+
+class AppointmentService
+{
+    /**
+     * Calculate the end time for an appointment.
+     */
+    public function calculateEndTime(string $startTime, int $duration): string
+    {
+        $startTimestamp = strtotime($startTime);
+        $endTimestamp = $startTimestamp + ($duration * 60);
+
+        return date('H:i', $endTimestamp);
+    }
+
+    /**
+     * Convert date to ISO format for database queries.
+     */
+    private function toIsoDate(string $date): string
+    {
+        // If already in ISO format, return as is
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return $date;
+        }
+
+        // Convert from European format (DD.MM.YYYY) to ISO (YYYY-MM-DD)
+        if (preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $date)) {
+            return Carbon::createFromFormat('d.m.Y', $date)->format('Y-m-d');
+        }
+
+        // Try to parse with Carbon
+        return Carbon::parse($date)->format('Y-m-d');
+    }
+
+    /**
+     * Check if a staff member is available at a specific date and time.
+     */
+    public function isStaffAvailable(Staff $staff, string $date, string $time, int $duration, ?string $excludeAppointmentId = null): bool
+    {
+        // Convert date to ISO format for database queries
+        $isoDate = $this->toIsoDate($date);
+
+        // Convert date to day of week
+        $dayOfWeek = strtolower(Carbon::parse($isoDate)->format('l'));
+
+        // Check working hours
+        $workingHours = $staff->working_hours[$dayOfWeek] ?? null;
+        if (!$workingHours || !$workingHours['is_working']) {
+            return false;
+        }
+
+        // Check if time is within working hours
+        $startTime = strtotime($workingHours['start']);
+        $endTime = strtotime($workingHours['end']);
+        $appointmentTime = strtotime($time);
+        $appointmentEndTime = strtotime("+{$duration} minutes", $appointmentTime);
+
+        if ($appointmentTime < $startTime || $appointmentEndTime > $endTime) {
+            return false;
+        }
+
+        // Check for salon breaks
+        $salon = $staff->salon;
+        foreach ($salon->salonBreaks as $break) {
+            if (!$break->is_active) continue;
+
+            if ($break->appliesTo($isoDate)) {
+                $breakStart = strtotime($break->start_time);
+                $breakEnd = strtotime($break->end_time);
+
+                // Check if appointment overlaps with break
+                if (($appointmentTime < $breakEnd) && ($appointmentEndTime > $breakStart)) {
+                    return false;
+                }
+            }
+        }
+
+        // Check for salon vacations
+        foreach ($salon->salonVacations as $vacation) {
+            if (!$vacation->is_active) continue;
+
+            if ($vacation->isActiveFor($isoDate)) {
+                return false;
+            }
+        }
+
+        // Check for staff breaks
+        foreach ($staff->breaks as $break) {
+            if (!$break->is_active) continue;
+
+            if ($break->appliesTo($isoDate)) {
+                $breakStart = strtotime($break->start_time);
+                $breakEnd = strtotime($break->end_time);
+
+                // Check if appointment overlaps with break
+                if (($appointmentTime < $breakEnd) && ($appointmentEndTime > $breakStart)) {
+                    return false;
+                }
+            }
+        }
+
+        // Check for staff vacations
+        foreach ($staff->vacations as $vacation) {
+            if (!$vacation->is_active) continue;
+
+            if ($vacation->isActiveFor($isoDate)) {
+                return false;
+            }
+        }
+
+        // Check for existing appointments
+        $query = Appointment::where('staff_id', $staff->id)
+            ->whereDate('date', $isoDate)
+            ->whereIn('status', ['confirmed', 'in_progress', 'pending']);
+
+        // Exclude the current appointment if updating
+        if ($excludeAppointmentId) {
+            $query->where('id', '!=', $excludeAppointmentId);
+        }
+
+        $existingAppointments = $query->get();
+
+        foreach ($existingAppointments as $appointment) {
+            $existingStart = strtotime($appointment->time);
+            $existingEnd = strtotime($appointment->end_time);
+
+            // Check if appointment overlaps with existing appointment
+            if (($appointmentTime < $existingEnd) && ($appointmentEndTime > $existingStart)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get available dates for a staff member and service.
+     */
+    public function getAvailableDates(Staff $staff, int $serviceId, int $daysAhead = 30): array
+    {
+        $service = $staff->services()->findOrFail($serviceId);
+        $availableDates = [];
+        $today = now();
+
+        for ($i = 0; $i < $daysAhead; $i++) {
+            $date = $today->copy()->addDays($i);
+            $isoDateString = $date->format('Y-m-d');
+            $europeanDateString = $date->format('d.m.Y');
+
+            // Check if there's at least one available slot on this date
+            $dayOfWeek = strtolower($date->format('l'));
+
+            // Check working hours
+            $workingHours = $staff->working_hours[$dayOfWeek] ?? null;
+            if (!$workingHours || !$workingHours['is_working']) {
+                continue;
+            }
+
+            // Check for salon vacations
+            $salon = $staff->salon;
+            $salonVacation = $salon->salonVacations()
+                ->where('is_active', true)
+                ->where(function ($query) use ($isoDateString) {
+                    $query->whereDate('start_date', '<=', $isoDateString)
+                          ->whereDate('end_date', '>=', $isoDateString);
+                })->exists();
+
+            if ($salonVacation) {
+                continue;
+            }
+
+            // Check for staff vacations
+            $staffVacation = $staff->vacations()
+                ->where('is_active', true)
+                ->where(function ($query) use ($isoDateString) {
+                    $query->whereDate('start_date', '<=', $isoDateString)
+                          ->whereDate('end_date', '>=', $isoDateString);
+                })->exists();
+
+            if ($staffVacation) {
+                continue;
+            }
+
+            // Generate time slots and check if any are available
+            $startTime = $workingHours['start'];
+            $endTime = $workingHours['end'];
+            $slots = $this->generateTimeSlots($startTime, $endTime);
+
+            foreach ($slots as $slot) {
+                if ($this->isStaffAvailable($staff, $isoDateString, $slot, $service->duration)) {
+                    $availableDates[] = $europeanDateString;
+                    break;
+                }
+            }
+        }
+
+        return $availableDates;
+    }    /**
+     * Generate time slots between start and end time.
+     */
+    private function generateTimeSlots(string $startTime, string $endTime, int $interval = 30): array
+    {
+        $slots = [];
+        $start = strtotime($startTime);
+        $end = strtotime($endTime);
+
+        for ($time = $start; $time < $end; $time += $interval * 60) {
+            $slots[] = date('H:i', $time);
+        }
+
+        return $slots;
+    }
+
+    /**
+     * Get available time slots for a staff member on a specific date.
+     *
+     * @param Staff $staff The staff member
+     * @param string $date Date in DD.MM.YYYY or YYYY-MM-DD format
+     * @param int $duration Service duration in minutes
+     * @return array Available time slots
+     */
+    public function getAvailableSlots(Staff $staff, string $date, int $duration): array
+    {
+        // Convert date to ISO format for internal processing
+        $isoDate = $this->toIsoDate($date);
+
+        // Get day of week
+        $dayOfWeek = strtolower(Carbon::parse($isoDate)->format('l'));
+
+        // Check working hours
+        $workingHours = $staff->working_hours[$dayOfWeek] ?? null;
+        if (!$workingHours || !$workingHours['is_working']) {
+            return [];
+        }
+
+        // Check for salon vacations
+        $salon = $staff->salon;
+        $salonVacation = $salon->salonVacations()
+            ->where('is_active', true)
+            ->where(function ($query) use ($isoDate) {
+                $query->whereDate('start_date', '<=', $isoDate)
+                      ->whereDate('end_date', '>=', $isoDate);
+            })->exists();
+
+        if ($salonVacation) {
+            return [];
+        }
+
+        // Check for staff vacations
+        $staffVacation = $staff->vacations()
+            ->where('is_active', true)
+            ->where(function ($query) use ($isoDate) {
+                $query->whereDate('start_date', '<=', $isoDate)
+                      ->whereDate('end_date', '>=', $isoDate);
+            })->exists();
+
+        if ($staffVacation) {
+            return [];
+        }
+
+        // Generate all possible time slots
+        $startTime = $workingHours['start'];
+        $endTime = $workingHours['end'];
+        $allSlots = $this->generateTimeSlots($startTime, $endTime);
+
+        // Filter slots that are actually available
+        $availableSlots = [];
+
+        foreach ($allSlots as $slot) {
+            // Check if service can finish before end of working hours
+            $slotEndTime = strtotime("+{$duration} minutes", strtotime($slot));
+            if ($slotEndTime > strtotime($endTime)) {
+                continue;
+            }
+
+            // Check if slot is available
+            if ($this->isStaffAvailable($staff, $isoDate, $slot, $duration)) {
+                // If it's today, filter out past times
+                if ($isoDate === Carbon::now()->format('Y-m-d')) {
+                    $now = Carbon::now()->format('H:i');
+                    if ($slot <= $now) {
+                        continue;
+                    }
+                }
+                $availableSlots[] = $slot;
+            }
+        }
+
+        return $availableSlots;
+    }
+}

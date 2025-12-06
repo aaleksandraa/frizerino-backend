@@ -1,0 +1,237 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Staff extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'avatar_url',
+    ];
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'user_id',
+        'salon_id',
+        'name',
+        'role',
+        'bio',
+        'avatar',
+        'working_hours',
+        'specialties',
+        'rating',
+        'review_count',
+        'is_active',
+        'auto_confirm',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'working_hours' => 'json',
+        'specialties' => 'json',
+        'is_active' => 'boolean',
+        'auto_confirm' => 'boolean',
+        'rating' => 'float',
+        'review_count' => 'integer',
+    ];
+
+    /**
+     * Get the user that owns the staff profile.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the salon that the staff member belongs to.
+     */
+    public function salon(): BelongsTo
+    {
+        return $this->belongsTo(Salon::class);
+    }
+
+    /**
+     * Get the services that the staff member can perform.
+     */
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'staff_services');
+    }
+
+    /**
+     * Get the appointments for the staff member.
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    /**
+     * Get the reviews for the staff member.
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /**
+     * Get the breaks for the staff member.
+     */
+    public function breaks(): HasMany
+    {
+        return $this->hasMany(StaffBreak::class);
+    }
+
+    /**
+     * Get the vacations for the staff member.
+     */
+    public function vacations(): HasMany
+    {
+        return $this->hasMany(StaffVacation::class);
+    }
+
+    /**
+     * Calculate the average rating for the staff member.
+     */
+    public function calculateRating(): void
+    {
+        $reviews = $this->reviews()->get();
+        $count = $reviews->count();
+
+        if ($count > 0) {
+            $this->rating = $reviews->avg('rating');
+            $this->review_count = $count;
+            $this->save();
+        }
+    }
+
+    /**
+     * Get the avatar URL attribute.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if ($this->avatar) {
+            return asset('storage/' . $this->avatar);
+        }
+        return null;
+    }
+
+    /**
+     * Check if staff member is available on a specific date and time.
+     */
+    public function isAvailable(string $date, string $time, int $duration = 30): bool
+    {
+        // Convert date format if needed (from European DD.MM.YYYY to ISO YYYY-MM-DD)
+        $isoDate = $date;
+        if (preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $date)) {
+            $isoDate = \Carbon\Carbon::createFromFormat('d.m.Y', $date)->format('Y-m-d');
+        }
+
+        // Convert date to day of week
+        $dayOfWeek = strtolower(date('l', strtotime($isoDate)));
+
+        // Check working hours
+        $workingHours = $this->working_hours[$dayOfWeek] ?? null;
+        if (!$workingHours || !$workingHours['is_working']) {
+            return false;
+        }
+
+        // Check if time is within working hours
+        $startTime = strtotime($workingHours['start']);
+        $endTime = strtotime($workingHours['end']);
+        $appointmentTime = strtotime($time);
+        $appointmentEndTime = strtotime("+{$duration} minutes", $appointmentTime);
+
+        if ($appointmentTime < $startTime || $appointmentEndTime > $endTime) {
+            return false;
+        }
+
+        // Check for salon breaks (applies to all staff in salon)
+        foreach ($this->salon->salonBreaks as $break) {
+            if (!$break->is_active) continue;
+
+            if ($break->appliesTo($isoDate)) {
+                $breakStart = strtotime($break->start_time);
+                $breakEnd = strtotime($break->end_time);
+
+                // Check if appointment overlaps with break
+                if (($appointmentTime < $breakEnd) && ($appointmentEndTime > $breakStart)) {
+                    return false;
+                }
+            }
+        }
+
+        // Check for salon vacations (applies to all staff in salon)
+        foreach ($this->salon->salonVacations as $vacation) {
+            if (!$vacation->is_active) continue;
+
+            if ($vacation->isActiveFor($isoDate)) {
+                return false;
+            }
+        }
+
+        // Check for staff breaks
+        foreach ($this->breaks as $break) {
+            if (!$break->is_active) continue;
+
+            if ($break->appliesTo($isoDate)) {
+                $breakStart = strtotime($break->start_time);
+                $breakEnd = strtotime($break->end_time);
+
+                // Check if appointment overlaps with break
+                if (($appointmentTime < $breakEnd) && ($appointmentEndTime > $breakStart)) {
+                    return false;
+                }
+            }
+        }
+
+        // Check for staff vacations
+        foreach ($this->vacations as $vacation) {
+            if (!$vacation->is_active) continue;
+
+            if ($vacation->isActiveFor($isoDate)) {
+                return false;
+            }
+        }
+
+        // Check for existing appointments (including pending - they also block slots)
+        $existingAppointments = $this->appointments()
+            ->where('date', $isoDate)
+            ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+            ->get();
+
+        foreach ($existingAppointments as $appointment) {
+            $existingStart = strtotime($appointment->time);
+            $existingEnd = strtotime($appointment->end_time);
+
+            // Check if appointment overlaps with existing appointment
+            if (($appointmentTime < $existingEnd) && ($appointmentEndTime > $existingStart)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}

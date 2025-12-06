@@ -1,0 +1,437 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Appointment\StoreAppointmentRequest;
+use App\Http\Requests\Appointment\UpdateAppointmentRequest;
+use App\Http\Resources\AppointmentResource;
+use App\Mail\AppointmentConfirmationMail;
+use App\Models\Appointment;
+use App\Models\Salon;
+use App\Models\Service;
+use App\Models\Staff;
+use App\Services\AppointmentService;
+use App\Services\NotificationService;
+use Carbon\Carbon;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+
+class AppointmentController extends Controller
+{
+    protected $appointmentService;
+    protected $notificationService;
+
+    public function __construct(
+        AppointmentService $appointmentService,
+        NotificationService $notificationService
+    ) {
+        $this->appointmentService = $appointmentService;
+        $this->notificationService = $notificationService;
+    }
+
+    /**
+     * Display a listing of the appointments for the authenticated user.
+     */
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $user = $request->user();
+        if (!$user) {
+        abort(401, 'Unauthorized');
+    }
+
+        $query = Appointment::query();
+
+        if ($user->isClient()) {
+            $query->where('client_id', $user->id);
+        } elseif ($user->isStaff()) {
+            $staffId = $user->staffProfile->id;
+            $query->where('staff_id', $staffId);
+        } elseif ($user->isSalonOwner()) {
+            $salonId = $user->ownedSalon->id;
+            $query->where('salon_id', $salonId);
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by date - convert European format (DD.MM.YYYY) to ISO format for database query
+        if ($request->has('date')) {
+            $dateInput = $request->date;
+            // Check if date is in European format (DD.MM.YYYY)
+            if (preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $dateInput)) {
+                $dateInput = Carbon::createFromFormat('d.m.Y', $dateInput)->format('Y-m-d');
+            }
+            $query->whereDate('date', $dateInput);
+        }
+
+        // Filter by upcoming/past
+        if ($request->has('type')) {
+            if ($request->type === 'upcoming') {
+                $query->upcoming();
+            } elseif ($request->type === 'past') {
+                $query->past();
+            }
+        }
+
+        $appointments = $query->with(['salon', 'staff', 'service'])
+            ->orderBy('date')
+            ->orderBy('time')
+            ->paginate($request->per_page ?? 15);
+
+        return AppointmentResource::collection($appointments);
+    }
+
+    /**
+     * Store a newly created appointment in storage.
+     *
+     * Uses database transaction and row locking to prevent race conditions
+     * where two users might try to book the same time slot simultaneously.
+     */
+    public function store(StoreAppointmentRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $isManualBooking = $user->role === 'salon' || $user->role === 'frizer';
+
+        try {
+            return DB::transaction(function () use ($request, $user, $isManualBooking) {
+                // Lock the staff row to prevent concurrent booking
+                // This ensures that only one transaction can check availability and create
+                // an appointment for this staff member at a time
+                $staff = Staff::where('id', $request->staff_id)
+                    ->with(['breaks', 'vacations', 'salon.salonBreaks', 'salon.salonVacations', 'services'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $service = Service::findOrFail($request->service_id);
+                $salon = Salon::findOrFail($request->salon_id);
+
+                // Check if the staff can perform this service
+                if (!$staff->services->contains($service->id)) {
+                    return response()->json([
+                        'message' => 'The selected staff cannot perform this service',
+                    ], 422);
+                }
+
+                // Check if the staff is available at the requested time
+                // This check is now protected by the row lock
+                if (!$this->appointmentService->isStaffAvailable($staff, $request->date, $request->time, $service->duration)) {
+                    return response()->json([
+                        'message' => 'The selected staff is not available at the requested time',
+                    ], 422);
+                }
+
+                // Calculate end time
+                $endTime = $this->appointmentService->calculateEndTime($request->time, $service->duration);
+
+                // For manual bookings, auto-confirm the appointment
+                // For client bookings, check salon's auto_confirm setting
+                $initialStatus = $isManualBooking
+                    ? 'confirmed'
+                    : (($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending');
+
+                // Use discount price if available, otherwise use regular price
+                $finalPrice = $service->discount_price ?? $service->price;
+
+                // Convert European date format (DD.MM.YYYY) to ISO format (YYYY-MM-DD) for database
+                $dateForDb = Carbon::createFromFormat('d.m.Y', $request->date)->format('Y-m-d');
+
+                // Determine client info based on booking type
+                if ($isManualBooking) {
+                    // Manual booking by salon/frizer - use provided client info
+                    $clientId = null; // No registered client
+                    $clientName = $request->client_name;
+                    $clientEmail = $request->client_email;
+                    $clientPhone = $request->client_phone;
+                    $isGuest = true;
+                    $guestAddress = $request->client_address;
+                } else {
+                    // Client booking themselves
+                    $clientId = $user->id;
+                    $clientName = $user->name;
+                    $clientEmail = $user->email;
+                    $clientPhone = $user->phone;
+                    $isGuest = false;
+                    $guestAddress = null;
+                }
+
+                $appointment = Appointment::create([
+                    'client_id' => $clientId,
+                    'client_name' => $clientName,
+                    'client_email' => $clientEmail,
+                    'client_phone' => $clientPhone,
+                    'is_guest' => $isGuest,
+                    'guest_address' => $guestAddress,
+                    'salon_id' => $salon->id,
+                    'staff_id' => $staff->id,
+                    'service_id' => $service->id,
+                    'date' => $dateForDb,
+                    'time' => $request->time,
+                    'end_time' => $endTime,
+                    'status' => $initialStatus,
+                    'notes' => $request->notes,
+                    'total_price' => $finalPrice,
+                    'payment_status' => 'pending',
+                ]);
+
+                // Send notifications
+                $this->notificationService->sendNewAppointmentNotifications($appointment);
+
+                // Send confirmation email to client
+                if ($clientEmail) {
+                    Mail::to($clientEmail)->send(new AppointmentConfirmationMail($appointment));
+                }
+
+                return response()->json([
+                    'message' => 'Appointment created successfully',
+                    'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
+                ], 201);
+            });
+        } catch (QueryException $e) {
+            // Check if this is a unique constraint violation (double booking attempt)
+            // PostgreSQL error code for unique violation is 23505
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'appointments_no_double_booking')) {
+                Log::warning('Double booking attempt prevented', [
+                    'user_id' => $user->id,
+                    'staff_id' => $request->staff_id,
+                    'date' => $request->date,
+                    'time' => $request->time,
+                ]);
+
+                return response()->json([
+                    'message' => 'This time slot has just been booked by another user. Please select a different time.',
+                ], 422);
+            }
+
+            // Re-throw other database errors
+            throw $e;
+        }
+    }
+
+    /**
+     * Display the specified appointment.
+     */
+    public function show(Appointment $appointment): AppointmentResource
+    {
+        $this->authorize('view', $appointment);
+
+        $appointment->load(['salon', 'staff', 'service', 'review']);
+
+        return new AppointmentResource($appointment);
+    }
+
+    /**
+     * Update the specified appointment in storage.
+     *
+     * Uses database transaction and row locking when changing date/time/staff
+     * to prevent race conditions.
+     */
+    public function update(UpdateAppointmentRequest $request, Appointment $appointment): JsonResponse
+    {
+        $this->authorize('update', $appointment);
+
+        // Convert date from European format if provided
+        $dateForQuery = null;
+        if ($request->has('date') && preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $request->date)) {
+            $dateForQuery = Carbon::createFromFormat('d.m.Y', $request->date)->format('Y-m-d');
+        }
+
+        // If changing date/time/staff/service, check availability with locking
+        if ($request->has('date') || $request->has('time') || $request->has('staff_id') || $request->has('service_id')) {
+            try {
+                return DB::transaction(function () use ($request, $appointment, $dateForQuery) {
+                    $date = $dateForQuery ?? $request->date ?? $appointment->date;
+                    $time = $request->time ?? $appointment->time;
+                    $staffId = $request->staff_id ?? $appointment->staff_id;
+                    $serviceId = $request->service_id ?? $appointment->service_id;
+
+                    // Lock the staff row to prevent concurrent booking
+                    $staff = Staff::where('id', $staffId)
+                        ->with(['breaks', 'vacations', 'salon.salonBreaks', 'salon.salonVacations', 'services'])
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    $service = Service::findOrFail($serviceId);
+
+                    // Check if the staff can perform this service
+                    if (!$staff->services->contains($service->id)) {
+                        return response()->json([
+                            'message' => 'The selected staff cannot perform this service',
+                        ], 422);
+                    }
+
+                    // Check if the staff is available at the requested time (excluding this appointment)
+                    if (!$this->appointmentService->isStaffAvailable($staff, $date, $time, $service->duration, $appointment->id)) {
+                        return response()->json([
+                            'message' => 'The selected staff is not available at the requested time',
+                        ], 422);
+                    }
+
+                    // Build update data
+                    $updateData = $request->validated();
+
+                    // Replace date with converted format if needed
+                    if ($dateForQuery) {
+                        $updateData['date'] = $dateForQuery;
+                    }
+
+                    // Calculate end time if time or service changed
+                    if ($request->has('time') || $request->has('service_id')) {
+                        $updateData['end_time'] = $this->appointmentService->calculateEndTime($time, $service->duration);
+
+                        // Update total price if service changed
+                        if ($request->has('service_id')) {
+                            $updateData['total_price'] = $service->discount_price ?? $service->price;
+                        }
+                    }
+
+                    $oldStatus = $appointment->status;
+                    $appointment->update($updateData);
+
+                    // Send notifications if status changed
+                    if ($request->has('status') && $oldStatus !== $request->status) {
+                        $this->notificationService->sendAppointmentStatusChangeNotifications($appointment, $oldStatus);
+                    }
+
+                    return response()->json([
+                        'message' => 'Appointment updated successfully',
+                        'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
+                    ]);
+                });
+            } catch (QueryException $e) {
+                // Check if this is a unique constraint violation
+                if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'appointments_no_double_booking')) {
+                    Log::warning('Double booking attempt prevented on update', [
+                        'appointment_id' => $appointment->id,
+                        'staff_id' => $request->staff_id ?? $appointment->staff_id,
+                        'date' => $request->date ?? $appointment->date,
+                        'time' => $request->time ?? $appointment->time,
+                    ]);
+
+                    return response()->json([
+                        'message' => 'This time slot has just been booked by another user. Please select a different time.',
+                    ], 422);
+                }
+
+                throw $e;
+            }
+        }
+
+        // If not changing scheduling fields, just update directly
+        $oldStatus = $appointment->status;
+        $appointment->update($request->validated());
+
+        // Send notifications if status changed
+        if ($request->has('status') && $oldStatus !== $request->status) {
+            $this->notificationService->sendAppointmentStatusChangeNotifications($appointment, $oldStatus);
+        }
+
+        return response()->json([
+            'message' => 'Appointment updated successfully',
+            'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
+        ]);
+    }
+
+    /**
+     * Remove the specified appointment from storage.
+     */
+    public function destroy(Appointment $appointment): JsonResponse
+    {
+        $this->authorize('delete', $appointment);
+
+        $appointment->delete();
+
+        return response()->json([
+            'message' => 'Appointment deleted successfully',
+        ]);
+    }
+
+    /**
+     * Cancel the specified appointment.
+     */
+    public function cancel(Appointment $appointment): JsonResponse
+    {
+        $this->authorize('cancel', $appointment);
+
+        if (!$appointment->canBeCancelled()) {
+            return response()->json([
+                'message' => 'This appointment cannot be cancelled',
+            ], 422);
+        }
+
+        $oldStatus = $appointment->status;
+        $appointment->update(['status' => 'cancelled']);
+
+        // Send notifications
+        $this->notificationService->sendAppointmentStatusChangeNotifications($appointment, $oldStatus);
+
+        return response()->json([
+            'message' => 'Appointment cancelled successfully',
+            'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
+        ]);
+    }
+
+    /**
+     * Mark the specified appointment as no-show (client didn't show up).
+     * Only staff or salon owner can mark an appointment as no-show.
+     */
+    public function markNoShow(Appointment $appointment): JsonResponse
+    {
+        $this->authorize('update', $appointment);
+
+        if (!$appointment->canBeMarkedAsNoShow()) {
+            return response()->json([
+                'message' => 'This appointment cannot be marked as no-show. It must be a confirmed appointment that has passed its start time.',
+            ], 422);
+        }
+
+        $oldStatus = $appointment->status;
+        $appointment->update(['status' => 'no_show']);
+
+        // Send notifications
+        $this->notificationService->sendAppointmentStatusChangeNotifications($appointment, $oldStatus);
+
+        Log::info('Appointment marked as no-show', [
+            'appointment_id' => $appointment->id,
+            'marked_by' => request()->user()->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Appointment marked as no-show',
+            'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
+        ]);
+    }
+
+    /**
+     * Mark the specified appointment as completed manually.
+     * Only staff or salon owner can mark an appointment as completed.
+     */
+    public function markCompleted(Appointment $appointment): JsonResponse
+    {
+        $this->authorize('update', $appointment);
+
+        if (!in_array($appointment->status, ['confirmed', 'in_progress'])) {
+            return response()->json([
+                'message' => 'Only confirmed or in-progress appointments can be marked as completed.',
+            ], 422);
+        }
+
+        $oldStatus = $appointment->status;
+        $appointment->update(['status' => 'completed']);
+
+        // Send notifications
+        $this->notificationService->sendAppointmentStatusChangeNotifications($appointment, $oldStatus);
+
+        return response()->json([
+            'message' => 'Appointment marked as completed',
+            'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
+        ]);
+    }
+}
