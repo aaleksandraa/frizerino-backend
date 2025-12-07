@@ -218,6 +218,111 @@ class AppointmentService
     }
 
     /**
+     * Check if a salon has at least one available staff member for a given date and time.
+     *
+     * @param int $salonId The salon ID
+     * @param string $date Date in DD.MM.YYYY or YYYY-MM-DD format
+     * @param string|null $time Time in HH:mm format (optional - if null, checks for any available slot)
+     * @param int $duration Service duration in minutes (default 60)
+     * @return bool True if salon has availability
+     */
+    public function isSalonAvailable(int $salonId, string $date, ?string $time = null, int $duration = 60): bool
+    {
+        // Convert date to ISO format
+        $isoDate = $this->toIsoDate($date);
+        $dayOfWeek = strtolower(Carbon::parse($isoDate)->format('l'));
+
+        // Get all active staff from this salon
+        $staffMembers = Staff::where('salon_id', $salonId)
+            ->where('is_active', true)
+            ->with(['breaks', 'vacations', 'salon.salonBreaks', 'salon.salonVacations'])
+            ->get();
+
+        if ($staffMembers->isEmpty()) {
+            return false;
+        }
+
+        foreach ($staffMembers as $staff) {
+            // Check working hours for this day
+            $workingHours = $staff->working_hours[$dayOfWeek] ?? null;
+            if (!$workingHours || !$workingHours['is_working']) {
+                continue;
+            }
+
+            // Check for salon vacations
+            $salonVacation = $staff->salon->salonVacations()
+                ->where('is_active', true)
+                ->where(function ($query) use ($isoDate) {
+                    $query->whereDate('start_date', '<=', $isoDate)
+                          ->whereDate('end_date', '>=', $isoDate);
+                })->exists();
+
+            if ($salonVacation) {
+                continue;
+            }
+
+            // Check for staff vacations
+            $staffVacation = $staff->vacations()
+                ->where('is_active', true)
+                ->where(function ($query) use ($isoDate) {
+                    $query->whereDate('start_date', '<=', $isoDate)
+                          ->whereDate('end_date', '>=', $isoDate);
+                })->exists();
+
+            if ($staffVacation) {
+                continue;
+            }
+
+            // If specific time is requested
+            if ($time) {
+                if ($this->isStaffAvailable($staff, $isoDate, $time, $duration)) {
+                    return true;
+                }
+            } else {
+                // Check if any slot is available
+                $slots = $this->getAvailableSlots($staff, $isoDate, $duration);
+                if (!empty($slots)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get list of salon IDs that have availability on a given date and time.
+     *
+     * @param string $date Date in DD.MM.YYYY or YYYY-MM-DD format
+     * @param string|null $time Time in HH:mm format (optional)
+     * @param int $duration Service duration in minutes
+     * @return array Array of available salon IDs
+     */
+    public function getAvailableSalonIds(string $date, ?string $time = null, int $duration = 60): array
+    {
+        $isoDate = $this->toIsoDate($date);
+        $dayOfWeek = strtolower(Carbon::parse($isoDate)->format('l'));
+
+        // Get all salons that have at least one staff working on this day
+        $potentialSalonIds = Staff::where('is_active', true)
+            ->whereNotNull("working_hours->{$dayOfWeek}")
+            ->whereJsonContains("working_hours->{$dayOfWeek}->is_working", true)
+            ->distinct()
+            ->pluck('salon_id')
+            ->toArray();
+
+        $availableSalonIds = [];
+
+        foreach ($potentialSalonIds as $salonId) {
+            if ($this->isSalonAvailable($salonId, $isoDate, $time, $duration)) {
+                $availableSalonIds[] = $salonId;
+            }
+        }
+
+        return $availableSalonIds;
+    }
+
+    /**
      * Get available time slots for a staff member on a specific date.
      *
      * @param Staff $staff The staff member

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FavoriteController;
+use App\Http\Controllers\Api\JobAdController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublicController;
@@ -90,6 +91,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/locations', [LocationController::class, 'index']);
             Route::get('/locations/grouped', [LocationController::class, 'grouped']);
             Route::get('/locations/cantons', [LocationController::class, 'cantons']);
+
+            // Job ads (public)
+            Route::get('/job-ads', [JobAdController::class, 'index']);
+            Route::get('/job-ads/{id}', [JobAdController::class, 'show']);
         });
     });
 
@@ -196,6 +201,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
         Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 
+        // Job ads for salon owners
+        Route::prefix('owner/job-ads')->group(function () {
+            Route::get('/', [JobAdController::class, 'ownerIndex']);
+            Route::post('/', [JobAdController::class, 'ownerStore']);
+            Route::put('/{id}', [JobAdController::class, 'ownerUpdate']);
+            Route::delete('/{id}', [JobAdController::class, 'ownerDestroy']);
+        });
+
         // Admin routes with extra security
         Route::middleware('admin')->prefix('admin')->group(function () {
             Route::get('/dashboard', [AdminController::class, 'dashboardStats']);
@@ -224,6 +237,16 @@ Route::prefix('v1')->group(function () {
             // Gradient/Appearance settings
             Route::get('/gradient-presets', [SettingsController::class, 'getGradientPresets']);
             Route::put('/gradient', [SettingsController::class, 'updateGradient']);
+            Route::put('/navbar-gradient', [SettingsController::class, 'updateNavbarGradient']);
+
+            // Salon profile layout settings
+            Route::get('/salon-profile-layout', [SettingsController::class, 'getSalonProfileLayout']);
+            Route::get('/salon-profile-layouts', [SettingsController::class, 'getSalonProfileLayoutOptions']);
+            Route::put('/salon-profile-layout', [SettingsController::class, 'updateSalonProfileLayout']);
+
+            // Featured salon settings
+            Route::get('/featured-salon', [SettingsController::class, 'getFeaturedSalonAdmin']);
+            Route::put('/featured-salon', [SettingsController::class, 'updateFeaturedSalon']);
 
             // Locations management
             Route::get('/locations', [LocationController::class, 'adminIndex']);
@@ -231,6 +254,14 @@ Route::prefix('v1')->group(function () {
             Route::get('/locations/{location}', [LocationController::class, 'show']);
             Route::put('/locations/{location}', [LocationController::class, 'update']);
             Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
+
+            // Job ads management
+            Route::get('/job-ads', [JobAdController::class, 'adminIndex']);
+            Route::post('/job-ads', [JobAdController::class, 'store']);
+            Route::put('/job-ads/owner-posting-setting', [JobAdController::class, 'updateOwnerPostingSetting']);
+            Route::put('/job-ads/{id}', [JobAdController::class, 'update']);
+            Route::delete('/job-ads/{id}', [JobAdController::class, 'destroy']);
+            Route::put('/job-ads/{id}/toggle-active', [JobAdController::class, 'toggleActive']);
         });
     });
 });
@@ -255,6 +286,11 @@ Route::middleware('throttle:120,1')->group(function () {
     // Public settings (analytics, appearance, etc.)
     Route::get('/public/analytics-settings', [SettingsController::class, 'getAnalytics']);
     Route::get('/public/appearance-settings', [SettingsController::class, 'getAppearance']);
+    Route::get('/public/featured-salon', [SettingsController::class, 'getFeaturedSalon']);
+
+    // Job ads (public)
+    Route::get('/public/job-ads', [JobAdController::class, 'index']);
+    Route::get('/public/job-ads/{id}', [JobAdController::class, 'show']);
 });
 
 Route::middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
@@ -366,6 +402,16 @@ Route::middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
         // Gradient/Appearance settings
         Route::get('/gradient-presets', [SettingsController::class, 'getGradientPresets']);
         Route::put('/gradient', [SettingsController::class, 'updateGradient']);
+        Route::put('/navbar-gradient', [SettingsController::class, 'updateNavbarGradient']);
+
+        // Salon profile layout settings
+        Route::get('/salon-profile-layout', [SettingsController::class, 'getSalonProfileLayout']);
+        Route::get('/salon-profile-layouts', [SettingsController::class, 'getSalonProfileLayoutOptions']);
+        Route::put('/salon-profile-layout', [SettingsController::class, 'updateSalonProfileLayout']);
+
+        // Featured salon settings
+        Route::get('/featured-salon', [SettingsController::class, 'getFeaturedSalonAdmin']);
+        Route::put('/featured-salon', [SettingsController::class, 'updateFeaturedSalon']);
 
         // Locations management
         Route::get('/locations', [LocationController::class, 'adminIndex']);

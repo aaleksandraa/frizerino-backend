@@ -15,11 +15,20 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout', 'register'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // IMPORTANT: When supports_credentials is true, cannot use '*'
+    // Must specify exact origins
+    'allowed_origins' => [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:5175',
+        'https://frizerino.com',
+        'https://www.frizerino.com',
+    ],
 
     'allowed_origins_patterns' => [],
 

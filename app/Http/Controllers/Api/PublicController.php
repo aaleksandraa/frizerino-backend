@@ -277,6 +277,35 @@ class PublicController extends Controller
             ->with(['images', 'services'])
             ->withCount(['reviews', 'staff']);
 
+        // Filter by date and time availability
+        if ($request->filled('date')) {
+            $date = $request->date;
+            $time = $request->filled('time') ? $request->time : null;
+            $duration = $request->filled('duration') ? (int) $request->duration : 60;
+
+            // Get salon IDs that have availability
+            $availableSalonIds = $this->appointmentService->getAvailableSalonIds($date, $time, $duration);
+
+            if (empty($availableSalonIds)) {
+                // No salons available, return empty result
+                return response()->json([
+                    'salons' => [],
+                    'filters' => [
+                        'applied' => $request->only(['q', 'city', 'service', 'min_rating', 'audience', 'date', 'time']),
+                        'available_cities' => $this->getAvailableCities(),
+                    ],
+                    'meta' => [
+                        'current_page' => 1,
+                        'last_page' => 1,
+                        'per_page' => $request->per_page ?? 12,
+                        'total' => 0,
+                    ],
+                ]);
+            }
+
+            $query->whereIn('id', $availableSalonIds);
+        }
+
         // Search by name with fuzzy matching for Croatian diacritics
         if ($request->filled('q')) {
             $searchTerm = $request->q;
@@ -333,9 +362,28 @@ class PublicController extends Controller
             }
         }
 
-        // Sort options
+        // Sort options - map frontend values to database columns
+        $sortMapping = [
+            'newest' => 'created_at',
+            'oldest' => 'created_at',
+            'rating' => 'rating',
+            'name' => 'name',
+            'review_count' => 'review_count',
+        ];
         $sortField = $request->sort ?? 'rating';
         $sortDirection = $request->direction ?? 'desc';
+
+        // Handle special cases where sort value implies direction
+        if ($sortField === 'newest') {
+            $sortField = 'created_at';
+            $sortDirection = 'desc';
+        } elseif ($sortField === 'oldest') {
+            $sortField = 'created_at';
+            $sortDirection = 'asc';
+        } elseif (isset($sortMapping[$sortField])) {
+            $sortField = $sortMapping[$sortField];
+        }
+
         $query->orderBy($sortField, $sortDirection);
 
         $salons = $query->paginate($request->per_page ?? 12);
@@ -343,7 +391,7 @@ class PublicController extends Controller
         return response()->json([
             'salons' => SalonResource::collection($salons),
             'filters' => [
-                'applied' => $request->only(['q', 'city', 'service', 'min_rating', 'audience']),
+                'applied' => $request->only(['q', 'city', 'service', 'min_rating', 'audience', 'date', 'time']),
                 'available_cities' => $this->getAvailableCities(),
             ],
         ]);
