@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\SalonController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StaffController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -208,6 +209,11 @@ Route::prefix('v1')->group(function () {
             Route::put('/{id}', [JobAdController::class, 'ownerUpdate']);
             Route::delete('/{id}', [JobAdController::class, 'ownerDestroy']);
         });
+
+        // Clients management for salon owners and staff
+        Route::get('/clients', [ClientController::class, 'index']);
+        Route::post('/clients/send-email', [ClientController::class, 'sendEmail']);
+        Route::get('/clients/{clientId}', [ClientController::class, 'show']);
 
         // Admin routes with extra security
         Route::middleware('admin')->prefix('admin')->group(function () {
