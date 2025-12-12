@@ -146,11 +146,15 @@ class SettingsController extends Controller
         // 'minimal' - Clean, no hero, focus on content
         $salonProfileLayout = SystemSetting::get('salon_profile_layout', 'classic');
 
+        // Sticky navbar option - whether navbar should stick to top on scroll
+        $stickyNavbar = SystemSetting::get('sticky_navbar', true);
+
         return response()->json([
             'gradient' => $gradient,
             'hero_background_image' => $heroBackgroundImage,
             'navbar_gradient' => $navbarGradient,
             'salon_profile_layout' => $salonProfileLayout,
+            'sticky_navbar' => $stickyNavbar,
         ]);
     }
 
@@ -236,6 +240,32 @@ class SettingsController extends Controller
         return response()->json([
             'message' => 'Navbar gradient postavke su uspješno sačuvane',
             'navbar_gradient' => $validated,
+        ]);
+    }
+
+    /**
+     * Update sticky navbar setting (admin only)
+     */
+    public function updateStickyNavbar(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user || $user->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'sticky' => 'required|boolean',
+        ]);
+
+        SystemSetting::set('sticky_navbar', $validated['sticky'], 'boolean', 'appearance');
+
+        // Clear cache
+        Cache::forget('setting_sticky_navbar');
+
+        return response()->json([
+            'message' => 'Sticky navbar postavka je uspješno sačuvana',
+            'sticky_navbar' => $validated['sticky'],
         ]);
     }
 

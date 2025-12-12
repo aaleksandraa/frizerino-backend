@@ -238,6 +238,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/gradient-presets', [SettingsController::class, 'getGradientPresets']);
             Route::put('/gradient', [SettingsController::class, 'updateGradient']);
             Route::put('/navbar-gradient', [SettingsController::class, 'updateNavbarGradient']);
+            Route::put('/sticky-navbar', [SettingsController::class, 'updateStickyNavbar']);
 
             // Salon profile layout settings
             Route::get('/salon-profile-layout', [SettingsController::class, 'getSalonProfileLayout']);
@@ -403,6 +404,7 @@ Route::middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
         Route::get('/gradient-presets', [SettingsController::class, 'getGradientPresets']);
         Route::put('/gradient', [SettingsController::class, 'updateGradient']);
         Route::put('/navbar-gradient', [SettingsController::class, 'updateNavbarGradient']);
+        Route::put('/sticky-navbar', [SettingsController::class, 'updateStickyNavbar']);
 
         // Salon profile layout settings
         Route::get('/salon-profile-layout', [SettingsController::class, 'getSalonProfileLayout']);

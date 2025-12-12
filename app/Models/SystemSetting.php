@@ -104,7 +104,7 @@ class SystemSetting extends Model
         }
 
         return match ($type) {
-            'boolean' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            'boolean' => $value === 'true' || $value === '1' || $value === 1 || $value === true,
             'integer' => (int) $value,
             'json' => json_decode($value, true),
             default => $value,
