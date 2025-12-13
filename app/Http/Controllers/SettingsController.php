@@ -72,10 +72,9 @@ class SettingsController extends Controller
 
         foreach ($validated['settings'] as $settingData) {
             $setting = SystemSetting::where('key', $settingData['key'])->first();
+            $value = $settingData['value'];
 
             if ($setting) {
-                $value = $settingData['value'];
-
                 // Convert boolean values to string for storage
                 if ($setting->type === 'boolean') {
                     $value = $value ? 'true' : 'false';
@@ -90,6 +89,26 @@ class SettingsController extends Controller
 
                 // Clear cache for this setting
                 Cache::forget("setting_{$setting->key}");
+            } else {
+                // Create the setting if it doesn't exist
+                $type = 'string';
+                $group = 'analytics';
+
+                // Determine type based on key name or value
+                if (str_contains($settingData['key'], 'enabled') || is_bool($value)) {
+                    $type = 'boolean';
+                    $value = $value ? 'true' : 'false';
+                }
+
+                SystemSetting::create([
+                    'key' => $settingData['key'],
+                    'value' => is_array($value) ? json_encode($value) : $value,
+                    'type' => $type,
+                    'group' => $group,
+                ]);
+
+                // Clear cache for this setting
+                Cache::forget("setting_{$settingData['key']}");
             }
         }
 
@@ -108,9 +127,96 @@ class SettingsController extends Controller
      */
     public function getAnalytics(): JsonResponse
     {
-        $analytics = SystemSetting::getAnalyticsSettings();
+        // Don't use cache for this endpoint to ensure fresh data
+        $gaId = SystemSetting::where('key', 'google_analytics_id')->first();
+        $gaEnabled = SystemSetting::where('key', 'google_analytics_enabled')->first();
 
-        return response()->json($analytics);
+        return response()->json([
+            'google_analytics_id' => $gaId ? $gaId->value : null,
+            'google_analytics_enabled' => $gaEnabled ? ($gaEnabled->value === 'true' || $gaEnabled->value === '1' || $gaEnabled->value === true) : false,
+        ]);
+    }
+
+    /**
+     * Update analytics settings (admin only)
+     */
+    public function updateAnalytics(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user || $user->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'google_analytics_id' => 'nullable|string|max:50',
+            'google_analytics_enabled' => 'required|boolean',
+        ]);
+
+        // Update or create google_analytics_id
+        SystemSetting::set(
+            'google_analytics_id',
+            $validated['google_analytics_id'] ?? '',
+            'string',
+            'analytics'
+        );
+
+        // Update or create google_analytics_enabled
+        SystemSetting::set(
+            'google_analytics_enabled',
+            $validated['google_analytics_enabled'],
+            'boolean',
+            'analytics'
+        );
+
+        // Clear all related caches
+        Cache::forget('setting_google_analytics_id');
+        Cache::forget('setting_google_analytics_enabled');
+        Cache::forget('settings_analytics');
+
+        return response()->json([
+            'message' => 'Google Analytics podešavanja su uspješno sačuvana',
+            'google_analytics_id' => $validated['google_analytics_id'],
+            'google_analytics_enabled' => $validated['google_analytics_enabled'],
+        ]);
+    }
+
+    /**
+     * Get registration settings (public endpoint)
+     */
+    public function getRegistrationSettings(): JsonResponse
+    {
+        $allowFrizerRegistration = SystemSetting::get('allow_frizer_registration', false);
+
+        return response()->json([
+            'allow_frizer_registration' => $allowFrizerRegistration,
+        ]);
+    }
+
+    /**
+     * Update registration settings (admin only)
+     */
+    public function updateRegistrationSettings(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user || $user->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'allow_frizer_registration' => 'required|boolean',
+        ]);
+
+        SystemSetting::set('allow_frizer_registration', $validated['allow_frizer_registration'], 'boolean', 'registration');
+
+        // Clear cache
+        Cache::forget('setting_allow_frizer_registration');
+
+        return response()->json([
+            'message' => 'Postavke registracije su uspješno sačuvane',
+            'allow_frizer_registration' => $validated['allow_frizer_registration'],
+        ]);
     }
 
     /**

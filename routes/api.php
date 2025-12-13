@@ -99,6 +99,9 @@ Route::prefix('v1')->group(function () {
             // Public analytics settings (for GA injection)
             Route::get('/analytics-settings', [SettingsController::class, 'getAnalytics']);
 
+            // Public registration settings
+            Route::get('/registration-settings', [SettingsController::class, 'getRegistrationSettings']);
+
             // Locations (for salon registration dropdown)
             Route::get('/locations', [LocationController::class, 'index']);
             Route::get('/locations/grouped', [LocationController::class, 'grouped']);
@@ -277,6 +280,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/featured-salon', [SettingsController::class, 'getFeaturedSalonAdmin']);
             Route::put('/featured-salon', [SettingsController::class, 'updateFeaturedSalon']);
 
+            // Registration settings
+            Route::get('/registration-settings', [SettingsController::class, 'getRegistrationSettings']);
+            Route::put('/registration-settings', [SettingsController::class, 'updateRegistrationSettings']);
+
+            // Analytics settings
+            Route::put('/analytics-settings', [SettingsController::class, 'updateAnalytics']);
+
             // Locations management
             Route::get('/locations', [LocationController::class, 'adminIndex']);
             Route::post('/locations', [LocationController::class, 'store']);
@@ -442,6 +452,9 @@ Route::middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
         // Featured salon settings
         Route::get('/featured-salon', [SettingsController::class, 'getFeaturedSalonAdmin']);
         Route::put('/featured-salon', [SettingsController::class, 'updateFeaturedSalon']);
+
+        // Analytics settings
+        Route::put('/analytics-settings', [SettingsController::class, 'updateAnalytics']);
 
         // Locations management
         Route::get('/locations', [LocationController::class, 'adminIndex']);
