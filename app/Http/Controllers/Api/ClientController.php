@@ -26,8 +26,13 @@ class ClientController extends Controller
         // Get salon_id based on user role
         $salonId = null;
         if ($user->role === 'salon') {
-            $salonId = $user->salon_id;
+            // Salon owner - get salon via ownedSalon relationship
+            $salon = \App\Models\Salon::where('owner_id', $user->id)->first();
+            if ($salon) {
+                $salonId = $salon->id;
+            }
         } elseif ($user->role === 'frizer') {
+            // Staff member - get salon via staff profile
             $staff = \App\Models\Staff::where('user_id', $user->id)->first();
             if ($staff) {
                 $salonId = $staff->salon_id;
@@ -129,8 +134,13 @@ class ClientController extends Controller
         // Get salon_id based on user role
         $salonId = null;
         if ($user->role === 'salon') {
-            $salonId = $user->salon_id;
+            // Salon owner - get salon via ownedSalon relationship
+            $salon = \App\Models\Salon::where('owner_id', $user->id)->first();
+            if ($salon) {
+                $salonId = $salon->id;
+            }
         } elseif ($user->role === 'frizer') {
+            // Staff member - get salon via staff profile
             $staff = \App\Models\Staff::where('user_id', $user->id)->first();
             if ($staff) {
                 $salonId = $staff->salon_id;
@@ -203,10 +213,14 @@ class ClientController extends Controller
         $salonId = null;
         $salonName = '';
         if ($user->role === 'salon') {
-            $salon = \App\Models\Salon::find($user->salon_id);
-            $salonId = $user->salon_id;
-            $salonName = $salon ? $salon->name : '';
+            // Salon owner - get salon via ownedSalon relationship
+            $salon = \App\Models\Salon::where('owner_id', $user->id)->first();
+            if ($salon) {
+                $salonId = $salon->id;
+                $salonName = $salon->name;
+            }
         } elseif ($user->role === 'frizer') {
+            // Staff member - get salon via staff profile
             $staff = \App\Models\Staff::where('user_id', $user->id)->first();
             if ($staff) {
                 $salon = \App\Models\Salon::find($staff->salon_id);
