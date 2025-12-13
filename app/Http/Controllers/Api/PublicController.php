@@ -565,6 +565,42 @@ class PublicController extends Controller
     }
 
     /**
+     * Get available time slots for multiple services (public)
+     * Uses the same staff member for all services
+     */
+    public function availableSlotsMulti(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'salon_id' => 'required|exists:salons,id',
+            'date' => ['required', 'regex:/^\d{2}\.\d{2}\.\d{4}$/'],
+            'services' => 'required|array|min:1',
+            'services.*.serviceId' => 'required|exists:services,id',
+            'services.*.staffId' => 'required|exists:staff,id',
+            'services.*.duration' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validacija nije uspjela',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $salon = Salon::findOrFail($request->salon_id);
+        $salonService = app(\App\Services\SalonService::class);
+
+        $slots = $salonService->getAvailableTimeSlotsForMultipleServices(
+            $salon,
+            $request->date,
+            $request->services
+        );
+
+        return response()->json([
+            'slots' => $slots,
+        ]);
+    }
+
+    /**
      * Generate sitemap data
      */
     public function sitemap(): JsonResponse

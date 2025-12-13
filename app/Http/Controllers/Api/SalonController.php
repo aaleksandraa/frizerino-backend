@@ -267,13 +267,40 @@ class SalonController extends Controller
             'date' => 'required|date_format:d.m.Y',
             'staff_id' => 'required|exists:staff,id',
             'service_id' => 'required|exists:services,id',
+            'duration' => 'nullable|integer|min:1', // Optional: total duration if multiple services
         ]);
 
         $slots = $this->salonService->getAvailableTimeSlots(
             $salon,
             $request->staff_id,
             $request->date,
-            $request->service_id
+            $request->service_id,
+            $request->duration // Pass duration parameter
+        );
+
+        return response()->json([
+            'slots' => $slots,
+        ]);
+    }
+
+    /**
+     * Get available time slots for multiple services with different staff members.
+     * This is the PROFESSIONAL solution for booking multiple services.
+     */
+    public function availableSlotsMulti(Request $request, Salon $salon): JsonResponse
+    {
+        $request->validate([
+            'date' => 'required|date_format:d.m.Y',
+            'services' => 'required|array|min:1',
+            'services.*.serviceId' => 'required|exists:services,id',
+            'services.*.staffId' => 'required|exists:staff,id',
+            'services.*.duration' => 'required|integer|min:1',
+        ]);
+
+        $slots = $this->salonService->getAvailableTimeSlotsForMultipleServices(
+            $salon,
+            $request->date,
+            $request->services
         );
 
         return response()->json([

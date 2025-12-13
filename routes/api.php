@@ -51,6 +51,14 @@ Route::prefix('v1')->group(function () {
     // =============================================
     // PUBLIC ROUTES - No authentication required
     // =============================================
+
+    // Widget API (public, higher rate limit for legitimate use)
+    Route::prefix('widget')->middleware('throttle:60,1')->group(function () {
+        Route::get('/{salonSlug}', [\App\Http\Controllers\Api\WidgetController::class, 'show']);
+        Route::get('/slots/available', [\App\Http\Controllers\Api\WidgetController::class, 'availableSlots']);
+        Route::post('/book', [\App\Http\Controllers\Api\WidgetController::class, 'book']);
+    });
+
     Route::middleware('throttle:120,1')->group(function () {
         // Existing salon public routes
         Route::get('/salons', [SalonController::class, 'index']);
@@ -78,6 +86,9 @@ Route::prefix('v1')->group(function () {
 
             // Available time slots (public)
             Route::get('/available-slots', [PublicController::class, 'availableSlots']);
+
+            // Available time slots for multiple services (public)
+            Route::post('/available-slots-multi', [PublicController::class, 'availableSlotsMulti']);
 
             // Guest booking (no auth required)
             Route::post('/book', [PublicController::class, 'storeGuestAppointment']);
@@ -132,6 +143,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('/salons/{salon}/images/{image}', [SalonController::class, 'deleteImage']);
         Route::put('/salons/{salon}/images/{image}/primary', [SalonController::class, 'setPrimaryImage']);
         Route::get('/salons/{salon}/available-slots', [SalonController::class, 'availableSlots']);
+        Route::post('/salons/{salon}/available-slots-multi', [SalonController::class, 'availableSlotsMulti']);
 
         // Staff routes
         Route::post('/salons/{salon}/staff', [StaffController::class, 'store']);
@@ -214,6 +226,16 @@ Route::prefix('v1')->group(function () {
         Route::get('/clients', [ClientController::class, 'index']);
         Route::post('/clients/send-email', [ClientController::class, 'sendEmail']);
         Route::get('/clients/{clientId}', [ClientController::class, 'show']);
+
+        // Widget management (admin only)
+        Route::middleware('admin')->prefix('admin/widget')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\AdminWidgetController::class, 'index']);
+            Route::get('/{salonId}', [\App\Http\Controllers\Api\AdminWidgetController::class, 'show']);
+            Route::post('/{salonId}/generate', [\App\Http\Controllers\Api\AdminWidgetController::class, 'generateApiKey']);
+            Route::put('/{salonId}/settings', [\App\Http\Controllers\Api\AdminWidgetController::class, 'updateSettings']);
+            Route::delete('/{salonId}', [\App\Http\Controllers\Api\AdminWidgetController::class, 'destroy']);
+            Route::get('/{salonId}/analytics', [\App\Http\Controllers\Api\AdminWidgetController::class, 'analytics']);
+        });
 
         // Admin routes with extra security
         Route::middleware('admin')->prefix('admin')->group(function () {
