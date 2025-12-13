@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\JobAdController;
 use App\Http\Controllers\Api\LocationController;
@@ -13,7 +14,6 @@ use App\Http\Controllers\Api\SalonController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StaffController;
-use App\Http\Controllers\ClientController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
