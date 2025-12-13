@@ -160,8 +160,8 @@ class SalonController extends Controller
         Gate::authorize('update', $salon);
 
         $request->validate([
-            'images' => 'required|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
+            'images' => 'required|array|max:10',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB max per image
         ]);
 
         $uploadedImages = [];

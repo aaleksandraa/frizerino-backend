@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SalonResource;
 use App\Http\Resources\UserResource;
+use App\Mail\SalonApprovedMail;
 use App\Models\Appointment;
 use App\Models\Salon;
 use App\Models\User;
@@ -14,6 +15,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class AdminController extends Controller
@@ -152,6 +155,24 @@ class AdminController extends Controller
 
         // Send notification to salon owner
         $this->notificationService->sendSalonStatusChangeNotification($salon, 'approved');
+
+        // Send email notification to salon owner
+        try {
+            $salon->load('owner');
+            if ($salon->owner && $salon->owner->email) {
+                Mail::to($salon->owner->email)->send(new SalonApprovedMail($salon));
+                Log::info('Salon approval email sent', [
+                    'salon_id' => $salon->id,
+                    'owner_email' => $salon->owner->email
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail the approval
+            Log::error('Failed to send salon approval email', [
+                'salon_id' => $salon->id,
+                'error' => $e->getMessage()
+            ]);
+        }
 
         return response()->json([
             'message' => 'Salon approved successfully',

@@ -222,13 +222,15 @@ class AuthController extends Controller
             $request->session()->regenerate();
         }
 
-        // Load related data based on user role
+        // Load related data based on user role with status for pending check
         if ($user->role === 'salon') {
             $user->load('ownedSalon');
-            // Set salon property for frontend compatibility
             $user->salon = $user->ownedSalon ? [
                 'id' => $user->ownedSalon->id,
                 'name' => $user->ownedSalon->name,
+                'address' => $user->ownedSalon->address,
+                'city' => $user->ownedSalon->city,
+                'status' => $user->ownedSalon->status,
             ] : null;
         } elseif ($user->role === 'frizer') {
             $user->load('staffProfile.salon');
@@ -236,8 +238,10 @@ class AuthController extends Controller
                 $user->salon = [
                     'id' => $user->staffProfile->salon->id,
                     'name' => $user->staffProfile->salon->name,
+                    'address' => $user->staffProfile->salon->address,
+                    'city' => $user->staffProfile->salon->city,
+                    'status' => $user->staffProfile->salon->status,
                 ];
-                // staffProfile already includes avatar_url via accessor
             }
         }
 
@@ -269,10 +273,13 @@ class AuthController extends Controller
         // Load related data based on user role
         if ($user->role === 'salon') {
             $user->load('ownedSalon');
-            // Set salon property for frontend compatibility
+            // Set salon property for frontend compatibility with status for pending check
             $user->salon = $user->ownedSalon ? [
                 'id' => $user->ownedSalon->id,
                 'name' => $user->ownedSalon->name,
+                'address' => $user->ownedSalon->address,
+                'city' => $user->ownedSalon->city,
+                'status' => $user->ownedSalon->status,
             ] : null;
         } elseif ($user->role === 'frizer') {
             $user->load('staffProfile.salon');
@@ -280,6 +287,9 @@ class AuthController extends Controller
                 $user->salon = [
                     'id' => $user->staffProfile->salon->id,
                     'name' => $user->staffProfile->salon->name,
+                    'address' => $user->staffProfile->salon->address,
+                    'city' => $user->staffProfile->salon->city,
+                    'status' => $user->staffProfile->salon->status,
                 ];
                 // staffProfile already includes avatar_url via accessor
             }
