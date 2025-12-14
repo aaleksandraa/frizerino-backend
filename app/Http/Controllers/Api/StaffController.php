@@ -185,7 +185,7 @@ class StaffController extends Controller
             $query->where('status', $request->status);
         }
 
-        $appointments = $query->orderBy('date')->orderBy('time')->get();
+        $appointments = $query->orderBy('date', 'desc')->orderBy('time', 'desc')->get();
 
         return response()->json([
             'appointments' => AppointmentResource::collection($appointments),

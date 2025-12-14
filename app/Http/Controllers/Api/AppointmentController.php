@@ -82,8 +82,8 @@ class AppointmentController extends Controller
         }
 
         $appointments = $query->with(['salon', 'staff', 'service'])
-            ->orderBy('date')
-            ->orderBy('time')
+            ->orderBy('date', 'desc')
+            ->orderBy('time', 'desc')
             ->paginate($request->per_page ?? 15);
 
         return AppointmentResource::collection($appointments);
