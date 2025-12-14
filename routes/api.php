@@ -99,6 +99,12 @@ Route::prefix('v1')->group(function () {
             // Public analytics settings (for GA injection)
             Route::get('/analytics-settings', [SettingsController::class, 'getAnalytics']);
 
+            // Public appearance settings
+            Route::get('/appearance-settings', [SettingsController::class, 'getAppearance']);
+
+            // Public featured salon
+            Route::get('/featured-salon', [SettingsController::class, 'getFeaturedSalon']);
+
             // Public registration settings
             Route::get('/registration-settings', [SettingsController::class, 'getRegistrationSettings']);
 
