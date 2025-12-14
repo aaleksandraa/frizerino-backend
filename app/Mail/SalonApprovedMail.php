@@ -44,7 +44,7 @@ class SalonApprovedMail extends Mailable implements ShouldQueue
             with: [
                 'salon' => $this->salon,
                 'ownerName' => $this->salon->owner?->name ?? 'Vlasnik',
-                'dashboardUrl' => config('app.frontend_url', 'https://frizerino.ba') . '/dashboard',
+                'dashboardUrl' => config('app.frontend_url', 'https://frizerino.com') . '/dashboard',
             ],
         );
     }

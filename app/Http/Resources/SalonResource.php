@@ -44,19 +44,12 @@ class SalonResource extends JsonResource
             'meta_description' => $this->meta_description,
             'images' => $this->when($this->relationLoaded('images'), function () {
                 return $this->images->map(function ($image) {
-                    // Check if path is already a full URL
-                    $url = null;
-                    if ($image->path) {
-                        if (filter_var($image->path, FILTER_VALIDATE_URL)) {
-                            $url = $image->path;
-                        } else {
-                            $url = url('storage/' . $image->path);
-                        }
-                    }
                     return [
                         'id' => $image->id,
-                        'url' => $url,
+                        'url' => $image->url, // Use the model's url accessor
+                        'path' => $image->path,
                         'is_primary' => $image->is_primary,
+                        'order' => $image->order,
                     ];
                 });
             }),

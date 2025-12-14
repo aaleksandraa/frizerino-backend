@@ -209,14 +209,14 @@
 
         <p>
             Ako imate bilo kakvih pitanja ili trebate pomoć, slobodno nas kontaktirajte na
-            <a href="mailto:podrska@frizerino.ba">podrska@frizerino.ba</a>.
+            <a href="mailto:podrska@frizerino.com">podrska@frizerino.com</a>.
         </p>
 
         <p>Srdačan pozdrav,<br>Tim Frizerino</p>
 
         <div class="footer">
             <p>
-                Ovaj email je poslan sa <a href="https://frizerino.ba">Frizerino</a> platforme.<br>
+                Ovaj email je poslan sa <a href="https://frizerino.com">Frizerino</a> platforme.<br>
                 © {{ date('Y') }} Frizerino. Sva prava zadržana.
             </p>
         </div>

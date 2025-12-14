@@ -106,14 +106,10 @@ class SalonController extends Controller
      */
     public function show(Salon $salon): SalonResource
     {
-        // Use caching for individual salon details
-        $cacheKey = $this->cacheService->salonKey($salon->id);
-        $cachedSalon = $this->cacheService->remember($cacheKey, function () use ($salon) {
-            $salon->load(['images', 'services.staff', 'staff', 'reviews', 'salonBreaks', 'salonVacations']);
-            return $salon;
-        });
+        // Load relations without caching to ensure fresh data with proper URLs
+        $salon->load(['images', 'services.staff', 'staff', 'reviews', 'salonBreaks', 'salonVacations']);
 
-        return new SalonResource($cachedSalon);
+        return new SalonResource($salon);
     }
 
     /**
@@ -176,8 +172,18 @@ class SalonController extends Controller
                 'is_primary' => $salon->images()->count() === 0,
             ]);
 
-            $uploadedImages[] = $salonImage;
+            // Explicitly include URL in response
+            $uploadedImages[] = [
+                'id' => $salonImage->id,
+                'path' => $salonImage->path,
+                'url' => $salonImage->url,
+                'is_primary' => $salonImage->is_primary,
+                'order' => $salonImage->order,
+            ];
         }
+
+        // Invalidate salon cache after image upload
+        $this->cacheService->invalidateSalonCache($salon->id);
 
         return response()->json([
             'message' => 'Images uploaded successfully',
@@ -208,6 +214,9 @@ class SalonController extends Controller
                 $firstImage->update(['is_primary' => true]);
             }
         }
+
+        // Invalidate salon cache after image deletion
+        $this->cacheService->invalidateSalonCache($salon->id);
 
         return response()->json([
             'message' => 'Image deleted successfully',
