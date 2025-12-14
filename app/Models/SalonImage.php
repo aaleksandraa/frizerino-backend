@@ -33,6 +33,13 @@ class SalonImage extends Model
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = ['url'];
+
+    /**
      * Get the salon that owns the image.
      */
     public function salon(): BelongsTo
