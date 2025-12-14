@@ -19,7 +19,7 @@ class ServiceController extends Controller
     public function index(Salon $salon): AnonymousResourceCollection
     {
         $services = $salon->services()->with('staff')->get();
-        
+
         return ServiceResource::collection($services);
     }
 
@@ -35,6 +35,10 @@ class ServiceController extends Controller
         if ($request->has('staff_ids')) {
             $service->staff()->sync($request->staff_ids);
         }
+
+        // Invalidate cache
+        \App\Services\CacheService::invalidateSalon($salon->id, $salon->slug);
+        \Illuminate\Support\Facades\Cache::forget('services.popular');
 
         return response()->json([
             'message' => 'Service created successfully',
@@ -52,7 +56,7 @@ class ServiceController extends Controller
         }
 
         $service->load('staff');
-        
+
         return new ServiceResource($service);
     }
 
@@ -73,6 +77,10 @@ class ServiceController extends Controller
             $service->staff()->sync($request->staff_ids);
         }
 
+        // Invalidate cache
+        \App\Services\CacheService::invalidateSalon($salon->id, $salon->slug);
+        \Illuminate\Support\Facades\Cache::forget('services.popular');
+
         return response()->json([
             'message' => 'Service updated successfully',
             'service' => new ServiceResource($service->load('staff')),
@@ -91,6 +99,10 @@ class ServiceController extends Controller
         }
 
         $service->delete();
+
+        // Invalidate cache
+        \App\Services\CacheService::invalidateSalon($salon->id, $salon->slug);
+        \Illuminate\Support\Facades\Cache::forget('services.popular');
 
         return response()->json([
             'message' => 'Service deleted successfully',
@@ -114,7 +126,7 @@ class ServiceController extends Controller
                 ->where('category', $category)
                 ->with('staff')
                 ->get();
-            
+
             $servicesByCategory[$category] = ServiceResource::collection($services);
         }
 

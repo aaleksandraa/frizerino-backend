@@ -50,7 +50,7 @@ class ReviewController extends Controller
         if ($request->has('order_by')) {
             $orderBy = $request->order_by;
             $direction = $request->order_direction ?? 'desc';
-            
+
             if ($orderBy === 'date') {
                 $query->orderBy('date', $direction);
             } elseif ($orderBy === 'rating') {
@@ -118,6 +118,9 @@ class ReviewController extends Controller
         // Send notifications
         $this->notificationService->sendNewReviewNotifications($review);
 
+        // Invalidate cache
+        \App\Services\CacheService::invalidateSalon($salon->id, $salon->slug);
+
         return response()->json([
             'message' => 'Review created successfully',
             'review' => new ReviewResource($review),
@@ -130,7 +133,7 @@ class ReviewController extends Controller
     public function show(Review $review): ReviewResource
     {
         $review->load(['client', 'salon', 'staff', 'appointment']);
-        
+
         return new ReviewResource($review);
     }
 

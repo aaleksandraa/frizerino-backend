@@ -23,6 +23,9 @@ return Application::configure()
             'throttle.custom' => \App\Http\Middleware\ThrottleRequests::class,
         ]);
 
+        // Dodaj Sentry context middleware
+        $middleware->append(\App\Http\Middleware\SentryContext::class);
+
         // Dodaj stateful middleware za Sanctum SPA autentifikaciju
         $middleware->statefulApi();
 

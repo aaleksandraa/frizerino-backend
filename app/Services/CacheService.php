@@ -7,108 +7,112 @@ use Illuminate\Support\Facades\Cache;
 class CacheService
 {
     /**
-     * Cache TTL in seconds (1 hour default).
+     * Cache durations in seconds
      */
-    protected int $ttl = 3600;
+    const SALON_LIST_TTL = 300;      // 5 minuta
+    const SALON_PROFILE_TTL = 600;   // 10 minuta
+    const SERVICES_TTL = 1800;       // 30 minuta
+    const REVIEWS_TTL = 300;         // 5 minuta
+    const STAFF_TTL = 600;           // 10 minuta
 
     /**
-     * Remember a value in cache.
+     * Generate cache key for salon list
      */
-    public function remember(string $key, callable $callback, ?int $ttl = null): mixed
+    public static function salonListKey(array $filters = []): string
     {
-        return Cache::remember($key, $ttl ?? $this->ttl, $callback);
+        return 'salons.list.' . md5(json_encode($filters));
     }
 
     /**
-     * Remember a value in cache forever.
+     * Generate cache key for salon profile
      */
-    public function rememberForever(string $key, callable $callback): mixed
+    public static function salonProfileKey(string $slug): string
     {
-        return Cache::rememberForever($key, $callback);
+        return "salon.profile.{$slug}";
     }
 
     /**
-     * Get a value from cache.
+     * Generate cache key for salon services
      */
-    public function get(string $key, mixed $default = null): mixed
+    public static function salonServicesKey(int $salonId): string
     {
-        return Cache::get($key, $default);
+        return "salon.{$salonId}.services";
     }
 
     /**
-     * Put a value in cache.
+     * Generate cache key for salon reviews
      */
-    public function put(string $key, mixed $value, ?int $ttl = null): bool
+    public static function salonReviewsKey(int $salonId): string
     {
-        return Cache::put($key, $value, $ttl ?? $this->ttl);
+        return "salon.{$salonId}.reviews";
     }
 
     /**
-     * Remove a value from cache.
+     * Generate cache key for salon staff
      */
-    public function forget(string $key): bool
+    public static function salonStaffKey(int $salonId): string
     {
-        return Cache::forget($key);
+        return "salon.{$salonId}.staff";
     }
 
     /**
-     * Clear cache by pattern.
+     * Invalidate all salon-related cache
      */
-    public function forgetByPattern(string $pattern): void
+    public static function invalidateSalon(int $salonId, ?string $slug = null): void
     {
-        // For file/database cache, we need to track keys manually
-        // For Redis, we could use KEYS command
-        Cache::flush(); // Simplified - in production, use tagged cache
+        // Invalidate specific salon caches
+        Cache::forget(self::salonServicesKey($salonId));
+        Cache::forget(self::salonReviewsKey($salonId));
+        Cache::forget(self::salonStaffKey($salonId));
+
+        if ($slug) {
+            Cache::forget(self::salonProfileKey($slug));
+        }
+
+        // Invalidate salon list cache (all variations)
+        // Note: In production, consider using cache tags for better invalidation
+        Cache::flush(); // Temporary solution - use tags in production
     }
 
     /**
-     * Generate cache key for salons list.
+     * Invalidate salon list cache
      */
-    public function salonListKey(array $filters = []): string
+    public static function invalidateSalonList(): void
     {
-        return 'salons:list:' . md5(json_encode($filters));
+        // In production, use cache tags to invalidate only salon list caches
+        // For now, we'll use a simple approach
+        Cache::tags(['salons'])->flush();
     }
 
     /**
-     * Generate cache key for single salon.
+     * Remember with automatic cache key generation
      */
-    public function salonKey(int $salonId): string
+    public static function remember(string $key, int $ttl, callable $callback)
     {
-        return "salons:{$salonId}";
+        return Cache::remember($key, $ttl, $callback);
     }
 
     /**
-     * Generate cache key for salon services.
+     * Forget cache by key
      */
-    public function salonServicesKey(int $salonId): string
+    public static function forget(string $key): void
     {
-        return "salons:{$salonId}:services";
+        Cache::forget($key);
     }
 
     /**
-     * Generate cache key for salon staff.
+     * Flush all cache
      */
-    public function salonStaffKey(int $salonId): string
+    public static function flush(): void
     {
-        return "salons:{$salonId}:staff";
+        Cache::flush();
     }
 
     /**
-     * Generate cache key for salon reviews.
+     * Alias for invalidateSalon (for backward compatibility)
      */
-    public function salonReviewsKey(int $salonId): string
+    public function invalidateSalonCache(int $salonId, ?string $slug = null): void
     {
-        return "salons:{$salonId}:reviews";
-    }
-
-    /**
-     * Invalidate all salon-related cache.
-     */
-    public function invalidateSalonCache(int $salonId): void
-    {
-        $this->forget($this->salonKey($salonId));
-        $this->forget($this->salonServicesKey($salonId));
-        $this->forget($this->salonStaffKey($salonId));
-        $this->forget($this->salonReviewsKey($salonId));
+        self::invalidateSalon($salonId, $slug);
     }
 }

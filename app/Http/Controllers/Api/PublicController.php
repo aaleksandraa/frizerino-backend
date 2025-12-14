@@ -41,24 +41,26 @@ class PublicController extends Controller
      */
     public function cities(): JsonResponse
     {
-        $cities = Salon::approved()
-            ->whereNotNull('city_slug')
-            ->select('city', 'city_slug', DB::raw('count(*) as salon_count'))
-            ->groupBy('city', 'city_slug')
-            ->orderBy('salon_count', 'desc')
-            ->get()
-            ->map(function ($city) {
-                return [
-                    'name' => $city->city,
-                    'slug' => $city->city_slug,
-                    'salon_count' => $city->salon_count,
-                    'url' => '/frizer-' . $city->city_slug,
-                    'meta' => [
-                        'title' => 'Frizeri i Kozmetičari u ' . $city->city . ' | Frizersko-Kozmetički Saloni',
-                        'description' => 'Pronađite najbolje frizere i kozmetičare u gradu ' . $city->city . '. Pregledajte cijene, recenzije i zakažite termin online.',
-                    ],
-                ];
-            });
+        $cities = \Illuminate\Support\Facades\Cache::remember('cities.list', 1800, function () {
+            return Salon::approved()
+                ->whereNotNull('city_slug')
+                ->select('city', 'city_slug', DB::raw('count(*) as salon_count'))
+                ->groupBy('city', 'city_slug')
+                ->orderBy('salon_count', 'desc')
+                ->get()
+                ->map(function ($city) {
+                    return [
+                        'name' => $city->city,
+                        'slug' => $city->city_slug,
+                        'salon_count' => $city->salon_count,
+                        'url' => '/frizer-' . $city->city_slug,
+                        'meta' => [
+                            'title' => 'Frizeri i Kozmetičari u ' . $city->city . ' | Frizersko-Kozmetički Saloni',
+                            'description' => 'Pronađite najbolje frizere i kozmetičare u gradu ' . $city->city . '. Pregledajte cijene, recenzije i zakažite termin online.',
+                        ],
+                    ];
+                });
+        });
 
         return response()->json([
             'cities' => $cities,
@@ -71,54 +73,58 @@ class PublicController extends Controller
      */
     public function popularServices(): JsonResponse
     {
-        // Get all unique service names with their counts across approved salons
-        $services = Service::query()
-            ->join('salons', 'services.salon_id', '=', 'salons.id')
-            ->where('salons.status', 'approved')
-            ->select(
-                'services.name',
-                'services.category',
-                DB::raw('COUNT(*) as salon_count'),
-                DB::raw('MIN(services.price) as min_price'),
-                DB::raw('MAX(services.price) as max_price')
-            )
-            ->groupBy('services.name', 'services.category')
-            ->orderBy('salon_count', 'desc')
-            ->limit(50)
-            ->get()
-            ->map(function ($service) {
-                return [
-                    'name' => $service->name,
-                    'category' => $service->category,
-                    'salon_count' => $service->salon_count,
-                    'min_price' => $service->min_price,
-                    'max_price' => $service->max_price,
-                    // Normalized name for search (remove diacritics)
-                    'search_name' => $this->normalizeText($service->name),
-                ];
-            });
+        $data = \Illuminate\Support\Facades\Cache::remember('services.popular', 1800, function () {
+            // Get all unique service names with their counts across approved salons
+            $services = Service::query()
+                ->join('salons', 'services.salon_id', '=', 'salons.id')
+                ->where('salons.status', 'approved')
+                ->select(
+                    'services.name',
+                    'services.category',
+                    DB::raw('COUNT(*) as salon_count'),
+                    DB::raw('MIN(services.price) as min_price'),
+                    DB::raw('MAX(services.price) as max_price')
+                )
+                ->groupBy('services.name', 'services.category')
+                ->orderBy('salon_count', 'desc')
+                ->limit(50)
+                ->get()
+                ->map(function ($service) {
+                    return [
+                        'name' => $service->name,
+                        'category' => $service->category,
+                        'salon_count' => $service->salon_count,
+                        'min_price' => $service->min_price,
+                        'max_price' => $service->max_price,
+                        // Normalized name for search (remove diacritics)
+                        'search_name' => $this->normalizeText($service->name),
+                    ];
+                });
 
-        // Get popular categories
-        $categories = Service::query()
-            ->join('salons', 'services.salon_id', '=', 'salons.id')
-            ->where('salons.status', 'approved')
-            ->select('services.category', DB::raw('COUNT(*) as service_count'))
-            ->groupBy('services.category')
-            ->orderBy('service_count', 'desc')
-            ->get()
-            ->map(function ($category) {
-                return [
-                    'name' => $category->category,
-                    'count' => $category->service_count,
-                    'search_name' => $this->normalizeText($category->category),
-                ];
-            });
+            // Get popular categories
+            $categories = Service::query()
+                ->join('salons', 'services.salon_id', '=', 'salons.id')
+                ->where('salons.status', 'approved')
+                ->select('services.category', DB::raw('COUNT(*) as service_count'))
+                ->groupBy('services.category')
+                ->orderBy('service_count', 'desc')
+                ->get()
+                ->map(function ($category) {
+                    return [
+                        'name' => $category->category,
+                        'count' => $category->service_count,
+                        'search_name' => $this->normalizeText($category->category),
+                    ];
+                });
 
-        return response()->json([
-            'services' => $services,
-            'categories' => $categories,
-            'total' => $services->count(),
-        ]);
+            return [
+                'services' => $services,
+                'categories' => $categories,
+                'total' => $services->count(),
+            ];
+        });
+
+        return response()->json($data);
     }
 
     /**
@@ -233,39 +239,49 @@ class PublicController extends Controller
      */
     public function salonBySlug(string $slug): JsonResponse
     {
-        $salon = Salon::approved()
-            ->where('slug', $slug)
-            ->with([
-                'images',
-                'services.staff',
-                'staff',
-                'salonBreaks',
-                'salonVacations',
-                'reviews' => function ($query) {
-                    $query->latest()->limit(10);
-                },
-                'reviews.client',
-            ])
-            ->withCount('reviews')
-            ->first();
+        $cacheKey = 'salon.profile.' . $slug;
 
-        if (!$salon) {
+        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($slug) {
+            $salon = Salon::approved()
+                ->where('slug', $slug)
+                ->with([
+                    'images',
+                    'services.staff',
+                    'staff',
+                    'salonBreaks',
+                    'salonVacations',
+                    'reviews' => function ($query) {
+                        $query->latest()->limit(10);
+                    },
+                    'reviews.client',
+                ])
+                ->withCount('reviews')
+                ->first();
+
+            if (!$salon) {
+                return null;
+            }
+
+            return [
+                'salon' => new SalonResource($salon),
+                'meta' => [
+                    'title' => $salon->meta_title ?: $salon->name . ' - Frizersko-Kozmetički Salon u ' . $salon->city,
+                    'description' => $salon->meta_description ?: 'Posjetite ' . $salon->name . ' u gradu ' . $salon->city . '. ' . Str::limit($salon->description, 150),
+                    'keywords' => $salon->meta_keywords ?: [$salon->name, 'frizer ' . $salon->city, 'kozmetičar ' . $salon->city, 'frizersko-kozmetički salon'],
+                    'canonical' => '/salon/' . $salon->slug,
+                    'image' => $salon->images->where('is_primary', true)->first()?->url,
+                ],
+                'schema' => $this->generateSalonSchema($salon),
+            ];
+        });
+
+        if (!$data) {
             return response()->json([
                 'message' => 'Salon nije pronađen',
             ], 404);
         }
 
-        return response()->json([
-            'salon' => new SalonResource($salon),
-            'meta' => [
-                'title' => $salon->meta_title ?: $salon->name . ' - Frizersko-Kozmetički Salon u ' . $salon->city,
-                'description' => $salon->meta_description ?: 'Posjetite ' . $salon->name . ' u gradu ' . $salon->city . '. ' . Str::limit($salon->description, 150),
-                'keywords' => $salon->meta_keywords ?: [$salon->name, 'frizer ' . $salon->city, 'kozmetičar ' . $salon->city, 'frizersko-kozmetički salon'],
-                'canonical' => '/salon/' . $salon->slug,
-                'image' => $salon->images->where('is_primary', true)->first()?->url,
-            ],
-            'schema' => $this->generateSalonSchema($salon),
-        ]);
+        return response()->json($data);
     }
 
     /**
