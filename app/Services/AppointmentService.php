@@ -190,7 +190,8 @@ class AppointmentService
             // Generate time slots and check if any are available
             $startTime = $workingHours['start'];
             $endTime = $workingHours['end'];
-            $slots = $this->generateTimeSlots($startTime, $endTime);
+            $interval = $staff->salon->booking_slot_interval ?? 30;
+            $slots = $this->generateTimeSlots($startTime, $endTime, $interval);
 
             foreach ($slots as $slot) {
                 if ($this->isStaffAvailable($staff, $isoDateString, $slot, $service->duration)) {
@@ -369,10 +370,11 @@ class AppointmentService
             return [];
         }
 
-        // Generate all possible time slots
+        // Generate all possible time slots using salon's booking interval
         $startTime = $workingHours['start'];
         $endTime = $workingHours['end'];
-        $allSlots = $this->generateTimeSlots($startTime, $endTime);
+        $interval = $staff->salon->booking_slot_interval ?? 30;
+        $allSlots = $this->generateTimeSlots($startTime, $endTime, $interval);
 
         // Filter slots that are actually available
         $availableSlots = [];

@@ -47,6 +47,7 @@ class Salon extends Model
         'status',
         'is_verified',
         'auto_confirm',
+        'booking_slot_interval',
     ];
 
     /**
@@ -67,6 +68,7 @@ class Salon extends Model
         'review_count' => 'integer',
         'latitude' => 'float',
         'longitude' => 'float',
+        'booking_slot_interval' => 'integer',
     ];
 
     /**

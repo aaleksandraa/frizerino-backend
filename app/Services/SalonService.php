@@ -187,9 +187,10 @@ class SalonService
             return [];
         }
 
-        // Generate all possible time slots (30-minute intervals)
+        // Generate all possible time slots using salon's booking interval
         // Only generate slots up to the latest possible start time
-        $slots = $this->generateTimeSlots($startTime, $latestStartTime, 30, true);
+        $interval = $salon->booking_slot_interval ?? 30; // Default to 30 if not set
+        $slots = $this->generateTimeSlots($startTime, $latestStartTime, $interval, true);
 
         \Log::info('Generated Slots', [
             'total_slots' => count($slots),
@@ -343,8 +344,9 @@ class SalonService
             return [];
         }
 
-        // Generate potential slots
-        $potentialSlots = $this->generateTimeSlots($effectiveStart, $latestStartTime, 30, true);
+        // Generate potential slots using salon's booking interval
+        $interval = $salon->booking_slot_interval ?? 30; // Default to 30 if not set
+        $potentialSlots = $this->generateTimeSlots($effectiveStart, $latestStartTime, $interval, true);
 
         // Filter slots where staff is available for the TOTAL duration
         $availableSlots = [];
