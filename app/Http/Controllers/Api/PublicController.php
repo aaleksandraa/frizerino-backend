@@ -294,8 +294,9 @@ class PublicController extends Controller
             ->withCount(['reviews', 'staff']);
 
         // Filter by date and time availability
-        if ($request->filled('date')) {
-            $date = $request->date;
+        if ($request->filled('date') || $request->filled('time')) {
+            // Use today's date if only time is specified
+            $date = $request->filled('date') ? $request->date : now()->format('d.m.Y');
             $time = $request->filled('time') ? $request->time : null;
             $duration = $request->filled('duration') ? (int) $request->duration : 60;
 
@@ -409,6 +410,14 @@ class PublicController extends Controller
             'filters' => [
                 'applied' => $request->only(['q', 'city', 'service', 'min_rating', 'audience', 'date', 'time']),
                 'available_cities' => $this->getAvailableCities(),
+            ],
+            'meta' => [
+                'current_page' => $salons->currentPage(),
+                'last_page' => $salons->lastPage(),
+                'per_page' => $salons->perPage(),
+                'total' => $salons->total(),
+                'from' => $salons->firstItem(),
+                'to' => $salons->lastItem(),
             ],
         ]);
     }

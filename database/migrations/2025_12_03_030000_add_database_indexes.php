@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -11,48 +12,102 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Helper function to check if index exists
+        $indexExists = function($indexName) {
+            try {
+                $connection = DB::connection()->getDriverName();
+                if ($connection === 'pgsql') {
+                    $result = DB::select("SELECT 1 FROM pg_indexes WHERE indexname = ?", [$indexName]);
+                    return count($result) > 0;
+                } elseif ($connection === 'mysql') {
+                    $result = DB::select("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND index_name = ?", [$indexName]);
+                    return count($result) > 0;
+                } elseif ($connection === 'sqlite') {
+                    $result = DB::select("SELECT 1 FROM sqlite_master WHERE type='index' AND name = ?", [$indexName]);
+                    return count($result) > 0;
+                }
+            } catch (\Exception $e) {
+                return false;
+            }
+            return false;
+        };
+
         // Appointments indexes
-        Schema::table('appointments', function (Blueprint $table) {
-            $table->index(['salon_id', 'date', 'status'], 'idx_appointments_salon_date_status');
-            $table->index(['staff_id', 'date', 'status'], 'idx_appointments_staff_date_status');
-            $table->index(['client_id', 'status', 'date'], 'idx_appointments_client_status_date');
-            $table->index('created_at', 'idx_appointments_created');
+        Schema::table('appointments', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_appointments_salon_date_status')) {
+                $table->index(['salon_id', 'date', 'status'], 'idx_appointments_salon_date_status');
+            }
+            if (!$indexExists('idx_appointments_staff_date_status')) {
+                $table->index(['staff_id', 'date', 'status'], 'idx_appointments_staff_date_status');
+            }
+            if (!$indexExists('idx_appointments_client_status_date')) {
+                $table->index(['client_id', 'status', 'date'], 'idx_appointments_client_status_date');
+            }
+            if (!$indexExists('idx_appointments_created')) {
+                $table->index('created_at', 'idx_appointments_created');
+            }
         });
 
         // Reviews indexes
-        Schema::table('reviews', function (Blueprint $table) {
-            $table->index(['salon_id', 'rating'], 'idx_reviews_salon_rating');
-            $table->index(['staff_id', 'rating'], 'idx_reviews_staff_rating');
-            $table->index('created_at', 'idx_reviews_created');
+        Schema::table('reviews', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_reviews_salon_rating')) {
+                $table->index(['salon_id', 'rating'], 'idx_reviews_salon_rating');
+            }
+            if (!$indexExists('idx_reviews_staff_rating')) {
+                $table->index(['staff_id', 'rating'], 'idx_reviews_staff_rating');
+            }
+            if (!$indexExists('idx_reviews_created')) {
+                $table->index('created_at', 'idx_reviews_created');
+            }
         });
 
         // Notifications indexes
-        Schema::table('notifications', function (Blueprint $table) {
-            $table->index(['recipient_id', 'is_read', 'created_at'], 'idx_notifications_user_unread');
-        });
+        if (Schema::hasTable('notifications')) {
+            Schema::table('notifications', function (Blueprint $table) use ($indexExists) {
+                if (!$indexExists('idx_notifications_user_unread')) {
+                    $table->index(['recipient_id', 'is_read', 'created_at'], 'idx_notifications_user_unread');
+                }
+            });
+        }
 
         // Services indexes
-        Schema::table('services', function (Blueprint $table) {
-            $table->index(['salon_id', 'is_active'], 'idx_services_salon_active');
-            $table->index('category', 'idx_services_category');
+        Schema::table('services', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_services_salon_active')) {
+                $table->index(['salon_id', 'is_active'], 'idx_services_salon_active');
+            }
+            if (!$indexExists('idx_services_category')) {
+                $table->index('category', 'idx_services_category');
+            }
         });
 
         // Staff indexes
-        Schema::table('staff', function (Blueprint $table) {
-            $table->index(['salon_id', 'is_active'], 'idx_staff_salon_active');
-            $table->index('user_id', 'idx_staff_user');
+        Schema::table('staff', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_staff_salon_active')) {
+                $table->index(['salon_id', 'is_active'], 'idx_staff_salon_active');
+            }
+            if (!$indexExists('idx_staff_user')) {
+                $table->index('user_id', 'idx_staff_user');
+            }
         });
 
         // Salons indexes
-        Schema::table('salons', function (Blueprint $table) {
-            $table->index(['status', 'is_verified'], 'idx_salons_status_verified');
-            $table->index('city', 'idx_salons_city');
-            $table->index('owner_id', 'idx_salons_owner');
+        Schema::table('salons', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_salons_status_verified')) {
+                $table->index(['status', 'is_verified'], 'idx_salons_status_verified');
+            }
+            if (!$indexExists('idx_salons_city')) {
+                $table->index('city', 'idx_salons_city');
+            }
+            if (!$indexExists('idx_salons_owner')) {
+                $table->index('owner_id', 'idx_salons_owner');
+            }
         });
 
         // Favorites indexes
-        Schema::table('favorites', function (Blueprint $table) {
-            $table->index(['user_id', 'salon_id'], 'idx_favorites_user_salon');
+        Schema::table('favorites', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_favorites_user_salon')) {
+                $table->index(['user_id', 'salon_id'], 'idx_favorites_user_salon');
+            }
         });
     }
 
