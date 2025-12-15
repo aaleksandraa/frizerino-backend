@@ -12,24 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Helper function to check if index exists
+        // Helper function to check if index exists (PostgreSQL)
         $indexExists = function($indexName) {
-            try {
-                $connection = DB::connection()->getDriverName();
-                if ($connection === 'pgsql') {
-                    $result = DB::select("SELECT 1 FROM pg_indexes WHERE indexname = ?", [$indexName]);
-                    return count($result) > 0;
-                } elseif ($connection === 'mysql') {
-                    $result = DB::select("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND index_name = ?", [$indexName]);
-                    return count($result) > 0;
-                } elseif ($connection === 'sqlite') {
-                    $result = DB::select("SELECT 1 FROM sqlite_master WHERE type='index' AND name = ?", [$indexName]);
-                    return count($result) > 0;
-                }
-            } catch (\Exception $e) {
-                return false;
-            }
-            return false;
+            $result = DB::select("SELECT 1 FROM pg_indexes WHERE indexname = ?", [$indexName]);
+            return !empty($result);
         };
 
         // Appointments indexes
@@ -62,13 +48,11 @@ return new class extends Migration
         });
 
         // Notifications indexes
-        if (Schema::hasTable('notifications')) {
-            Schema::table('notifications', function (Blueprint $table) use ($indexExists) {
-                if (!$indexExists('idx_notifications_user_unread')) {
-                    $table->index(['recipient_id', 'is_read', 'created_at'], 'idx_notifications_user_unread');
-                }
-            });
-        }
+        Schema::table('notifications', function (Blueprint $table) use ($indexExists) {
+            if (!$indexExists('idx_notifications_user_unread')) {
+                $table->index(['recipient_id', 'is_read', 'created_at'], 'idx_notifications_user_unread');
+            }
+        });
 
         // Services indexes
         Schema::table('services', function (Blueprint $table) use ($indexExists) {
