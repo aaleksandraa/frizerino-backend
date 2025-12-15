@@ -276,6 +276,7 @@ Route::prefix('v1')->group(function () {
             Route::put('/gradient', [SettingsController::class, 'updateGradient']);
             Route::put('/navbar-gradient', [SettingsController::class, 'updateNavbarGradient']);
             Route::put('/sticky-navbar', [SettingsController::class, 'updateStickyNavbar']);
+            Route::put('/search-version', [SettingsController::class, 'updateSearchVersion']);
 
             // Salon profile layout settings
             Route::get('/salon-profile-layout', [SettingsController::class, 'getSalonProfileLayout']);

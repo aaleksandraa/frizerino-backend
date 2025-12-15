@@ -255,12 +255,16 @@ class SettingsController extends Controller
         // Sticky navbar option - whether navbar should stick to top on scroll
         $stickyNavbar = SystemSetting::get('sticky_navbar', true);
 
+        // Search version - v1 or v2
+        $searchVersion = SystemSetting::get('search_version', 'v1');
+
         return response()->json([
             'gradient' => $gradient,
             'hero_background_image' => $heroBackgroundImage,
             'navbar_gradient' => $navbarGradient,
             'salon_profile_layout' => $salonProfileLayout,
             'sticky_navbar' => $stickyNavbar,
+            'search_version' => $searchVersion,
         ]);
     }
 
@@ -372,6 +376,32 @@ class SettingsController extends Controller
         return response()->json([
             'message' => 'Sticky navbar postavka je uspješno sačuvana',
             'sticky_navbar' => $validated['sticky'],
+        ]);
+    }
+
+    /**
+     * Update search version setting (admin only)
+     */
+    public function updateSearchVersion(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user || $user->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'version' => 'required|string|in:v1,v2',
+        ]);
+
+        SystemSetting::set('search_version', $validated['version'], 'string', 'appearance');
+
+        // Clear cache
+        Cache::forget('setting_search_version');
+
+        return response()->json([
+            'message' => 'Verzija pretrage je uspješno sačuvana',
+            'search_version' => $validated['version'],
         ]);
     }
 
