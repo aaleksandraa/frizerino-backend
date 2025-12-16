@@ -108,6 +108,10 @@ Route::prefix('v1')->group(function () {
             // Public registration settings
             Route::get('/registration-settings', [SettingsController::class, 'getRegistrationSettings']);
 
+            // Contact form
+            Route::post('/contact', [\App\Http\Controllers\Api\ContactController::class, 'send'])
+                ->middleware('throttle:5,1'); // 5 requests per minute
+
             // Locations (for salon registration dropdown)
             Route::get('/locations', [LocationController::class, 'index']);
             Route::get('/locations/grouped', [LocationController::class, 'grouped']);
