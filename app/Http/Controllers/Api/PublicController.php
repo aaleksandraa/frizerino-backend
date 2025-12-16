@@ -289,8 +289,19 @@ class PublicController extends Controller
      */
     public function search(Request $request): JsonResponse
     {
+        // Create cache key from request parameters
+        $cacheKey = 'search:' . md5(json_encode($request->all()));
+
+        // Cache for 5 minutes (300 seconds)
+        // Skip cache if date/time filters are present (real-time availability)
+        $useCache = !$request->filled('date') && !$request->filled('time');
+
+        if ($useCache && \Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            return response()->json(\Illuminate\Support\Facades\Cache::get($cacheKey));
+        }
+
         $query = Salon::approved()
-            ->with(['images', 'services'])
+            ->with(['images', 'services', 'owner:id,name,email']) // Eager load owner to prevent N+1
             ->withCount(['reviews', 'staff']);
 
         // Filter by date and time availability
@@ -405,7 +416,7 @@ class PublicController extends Controller
 
         $salons = $query->paginate($request->per_page ?? 12);
 
-        return response()->json([
+        $responseData = [
             'salons' => SalonResource::collection($salons),
             'filters' => [
                 'applied' => $request->only(['q', 'city', 'service', 'min_rating', 'audience', 'date', 'time']),
@@ -419,7 +430,14 @@ class PublicController extends Controller
                 'from' => $salons->firstItem(),
                 'to' => $salons->lastItem(),
             ],
-        ]);
+        ];
+
+        // Cache the response if applicable
+        if ($useCache) {
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $responseData, 300);
+        }
+
+        return response()->json($responseData);
     }
 
     /**

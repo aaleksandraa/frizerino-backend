@@ -26,9 +26,6 @@ return new class extends Migration
             if (!$indexExists('salons', 'idx_salons_status')) {
                 $table->index('status', 'idx_salons_status');
             }
-            if (!$indexExists('salons', 'idx_salons_slug')) {
-                $table->index('slug', 'idx_salons_slug');
-            }
             if (!$indexExists('salons', 'idx_salons_city_status')) {
                 $table->index(['city', 'status'], 'idx_salons_city_status');
             }
@@ -123,7 +120,6 @@ return new class extends Migration
         Schema::table('salons', function (Blueprint $table) {
             $table->dropIndex('idx_salons_city');
             $table->dropIndex('idx_salons_status');
-            $table->dropIndex('idx_salons_slug');
             $table->dropIndex('idx_salons_city_status');
         });
 

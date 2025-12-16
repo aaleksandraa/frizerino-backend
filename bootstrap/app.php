@@ -21,7 +21,11 @@ return Application::configure()
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'throttle.custom' => \App\Http\Middleware\ThrottleRequests::class,
+            'throttle.redis' => \App\Http\Middleware\ThrottleRequestsWithRedis::class,
         ]);
+
+        // Dodaj Security Headers middleware za sve API rute
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
 
         // Dodaj Sentry context middleware
         $middleware->append(\App\Http\Middleware\SentryContext::class);

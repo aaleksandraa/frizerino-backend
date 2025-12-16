@@ -52,14 +52,14 @@ Route::prefix('v1')->group(function () {
     // PUBLIC ROUTES - No authentication required
     // =============================================
 
-    // Widget API (public, higher rate limit for legitimate use)
-    Route::prefix('widget')->middleware('throttle:60,1')->group(function () {
+    // Widget API (public, with Redis rate limiting per IP)
+    Route::prefix('widget')->middleware('throttle.redis:60,1')->group(function () {
         Route::get('/{salonSlug}', [\App\Http\Controllers\Api\WidgetController::class, 'show']);
         Route::get('/slots/available', [\App\Http\Controllers\Api\WidgetController::class, 'availableSlots']);
         Route::post('/book', [\App\Http\Controllers\Api\WidgetController::class, 'book']);
     });
 
-    Route::middleware('throttle:120,1')->group(function () {
+    Route::middleware('throttle.redis:120,1')->group(function () {
         // Existing salon public routes
         Route::get('/salons', [SalonController::class, 'index']);
         Route::get('/salons/nearest', [SalonController::class, 'nearest']);
