@@ -11,6 +11,8 @@ use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Database\Seeders\LocationSeeder;
+
 
 class DatabaseSeeder extends Seeder
 {
@@ -19,7 +21,14 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create admin user
+         // 1. Osnovni podaci (lokacije, gradovi, države...)
+        $this->call([
+            LocationSeeder::class,
+        ]);
+
+
+
+          // Create admin user
         User::create([
             'name' => 'Admin User',
             'email' => 'admin@salonbooking.ba',

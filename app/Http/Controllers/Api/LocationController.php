@@ -15,34 +15,45 @@ class LocationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Location::active()->orderBy('name');
+        try {
+            $query = Location::active()->orderBy('name');
 
-        // Filter by entity
-        if ($request->filled('entity')) {
-            $query->where('entity', $request->entity);
+            // Filter by entity
+            if ($request->filled('entity')) {
+                $query->where('entity', $request->entity);
+            }
+
+            // Filter by canton
+            if ($request->filled('canton')) {
+                $query->where('canton', $request->canton);
+            }
+
+            // Search by name (with fuzzy matching for Croatian diacritics)
+            if ($request->filled('search')) {
+                $searchTerm = $request->search;
+                $normalizedSearch = $this->normalizeText($searchTerm);
+
+                $query->where(function ($q) use ($searchTerm, $normalizedSearch) {
+                    $q->where('name', 'ilike', '%' . $searchTerm . '%')
+                      ->orWhereRaw("TRANSLATE(LOWER(name), 'šŠčČćĆžŽđĐ', 'sScCcCzZdD') ILIKE ?", ['%' . $normalizedSearch . '%']);
+                });
+            }
+
+            $locations = $query->get();
+
+            return response()->json([
+                'locations' => $locations,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error loading locations: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Return empty array instead of error
+            return response()->json([
+                'locations' => [],
+            ], 200);
         }
-
-        // Filter by canton
-        if ($request->filled('canton')) {
-            $query->where('canton', $request->canton);
-        }
-
-        // Search by name (with fuzzy matching for Croatian diacritics)
-        if ($request->filled('search')) {
-            $searchTerm = $request->search;
-            $normalizedSearch = $this->normalizeText($searchTerm);
-
-            $query->where(function ($q) use ($searchTerm, $normalizedSearch) {
-                $q->where('name', 'ilike', '%' . $searchTerm . '%')
-                  ->orWhereRaw("TRANSLATE(LOWER(name), 'šŠčČćĆžŽđĐ', 'sScCcCzZdD') ILIKE ?", ['%' . $normalizedSearch . '%']);
-            });
-        }
-
-        $locations = $query->get();
-
-        return response()->json([
-            'locations' => $locations,
-        ]);
     }
 
     /**
