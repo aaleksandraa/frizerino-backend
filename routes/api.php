@@ -117,6 +117,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/locations/grouped', [LocationController::class, 'grouped']);
             Route::get('/locations/cantons', [LocationController::class, 'cantons']);
 
+            // Staff public profiles
+            Route::get('/staff/{slug}', [\App\Http\Controllers\Api\PublicStaffController::class, 'show']);
+            Route::get('/staff/{slug}/portfolio', [\App\Http\Controllers\Api\PublicStaffController::class, 'portfolio']);
+            Route::get('/staff/{slug}/reviews', [\App\Http\Controllers\Api\PublicStaffController::class, 'reviews']);
+            Route::get('/staff/{slug}/availability', [\App\Http\Controllers\Api\PublicStaffController::class, 'availability']);
+
             // Job ads (public)
             Route::get('/job-ads', [JobAdController::class, 'index']);
             Route::get('/job-ads/{id}', [JobAdController::class, 'show']);

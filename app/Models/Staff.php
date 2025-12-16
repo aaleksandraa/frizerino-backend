@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Staff extends Model
 {
@@ -31,14 +32,28 @@ class Staff extends Model
         'user_id',
         'salon_id',
         'name',
+        'slug',
         'role',
+        'title',
         'bio',
+        'bio_long',
         'avatar',
+        'profile_image',
         'working_hours',
         'specialties',
+        'years_experience',
+        'education',
+        'achievements',
+        'languages',
+        'instagram',
+        'facebook',
+        'tiktok',
         'rating',
         'review_count',
         'is_active',
+        'is_public',
+        'accepts_bookings',
+        'booking_note',
         'auto_confirm',
     ];
 
@@ -50,10 +65,16 @@ class Staff extends Model
     protected $casts = [
         'working_hours' => 'json',
         'specialties' => 'json',
+        'education' => 'json',
+        'achievements' => 'json',
+        'languages' => 'json',
         'is_active' => 'boolean',
+        'is_public' => 'boolean',
+        'accepts_bookings' => 'boolean',
         'auto_confirm' => 'boolean',
         'rating' => 'float',
         'review_count' => 'integer',
+        'years_experience' => 'integer',
     ];
 
     /**
@@ -110,6 +131,52 @@ class Staff extends Model
     public function vacations(): HasMany
     {
         return $this->hasMany(StaffVacation::class);
+    }
+
+    /**
+     * Get the portfolio items for the staff member.
+     */
+    public function portfolio(): HasMany
+    {
+        return $this->hasMany(StaffPortfolio::class)->orderBy('order');
+    }
+
+    /**
+     * Get featured portfolio items.
+     */
+    public function featuredPortfolio(): HasMany
+    {
+        return $this->hasMany(StaffPortfolio::class)->where('is_featured', true)->orderBy('order');
+    }
+
+    /**
+     * Scope for public staff members.
+     */
+    public function scopePublic($query)
+    {
+        return $query->where('is_public', true)->where('is_active', true);
+    }
+
+    /**
+     * Boot the model.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($staff) {
+            if (empty($staff->slug)) {
+                $staff->slug = Str::slug($staff->name);
+
+                // Ensure uniqueness
+                $count = 1;
+                $originalSlug = $staff->slug;
+                while (static::where('slug', $staff->slug)->exists()) {
+                    $staff->slug = $originalSlug . '-' . $count;
+                    $count++;
+                }
+            }
+        });
     }
 
     /**
