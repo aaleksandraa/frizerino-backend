@@ -77,35 +77,50 @@ class LocationController extends Controller
      */
     public function grouped(): JsonResponse
     {
-        $locations = Location::active()->orderBy('name')->get();
+        try {
+            $locations = Location::active()->orderBy('name')->get();
 
-        $grouped = [
-            'FBiH' => [],
-            'RS' => [],
-            'BD' => [],
-        ];
+            $grouped = [
+                'FBiH' => [],
+                'RS' => [],
+                'BD' => [],
+            ];
 
-        foreach ($locations as $location) {
-            if ($location->entity === 'FBiH') {
-                $canton = $location->canton ?: 'Ostalo';
-                if (!isset($grouped['FBiH'][$canton])) {
-                    $grouped['FBiH'][$canton] = [];
+            foreach ($locations as $location) {
+                if ($location->entity === 'FBiH') {
+                    $canton = $location->canton ?: 'Ostalo';
+                    if (!isset($grouped['FBiH'][$canton])) {
+                        $grouped['FBiH'][$canton] = [];
+                    }
+                    $grouped['FBiH'][$canton][] = $location;
+                } elseif ($location->entity === 'RS') {
+                    $region = $location->region ?: 'Ostalo';
+                    if (!isset($grouped['RS'][$region])) {
+                        $grouped['RS'][$region] = [];
+                    }
+                    $grouped['RS'][$region][] = $location;
+                } else {
+                    $grouped['BD'][] = $location;
                 }
-                $grouped['FBiH'][$canton][] = $location;
-            } elseif ($location->entity === 'RS') {
-                $region = $location->region ?: 'Ostalo';
-                if (!isset($grouped['RS'][$region])) {
-                    $grouped['RS'][$region] = [];
-                }
-                $grouped['RS'][$region][] = $location;
-            } else {
-                $grouped['BD'][] = $location;
             }
-        }
 
-        return response()->json([
-            'grouped' => $grouped,
-        ]);
+            return response()->json([
+                'grouped' => $grouped,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error loading grouped locations: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Return empty grouped structure instead of error
+            return response()->json([
+                'grouped' => [
+                    'FBiH' => [],
+                    'RS' => [],
+                    'BD' => [],
+                ],
+            ], 200);
+        }
     }
 
     /**
@@ -113,24 +128,36 @@ class LocationController extends Controller
      */
     public function cantons(): JsonResponse
     {
-        $cantons = Location::active()
-            ->whereNotNull('canton')
-            ->distinct()
-            ->pluck('canton')
-            ->sort()
-            ->values();
+        try {
+            $cantons = Location::active()
+                ->whereNotNull('canton')
+                ->distinct()
+                ->pluck('canton')
+                ->sort()
+                ->values();
 
-        $regions = Location::active()
-            ->whereNotNull('region')
-            ->distinct()
-            ->pluck('region')
-            ->sort()
-            ->values();
+            $regions = Location::active()
+                ->whereNotNull('region')
+                ->distinct()
+                ->pluck('region')
+                ->sort()
+                ->values();
 
-        return response()->json([
-            'cantons' => $cantons,
-            'regions' => $regions,
-        ]);
+            return response()->json([
+                'cantons' => $cantons,
+                'regions' => $regions,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error loading cantons/regions: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Return empty arrays instead of error
+            return response()->json([
+                'cantons' => [],
+                'regions' => [],
+            ], 200);
+        }
     }
 
     // ==================== ADMIN ROUTES ====================
