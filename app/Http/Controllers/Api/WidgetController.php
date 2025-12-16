@@ -29,7 +29,7 @@ class WidgetController extends Controller
         }
 
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -54,13 +54,13 @@ class WidgetController extends Controller
 
         // Get salon data
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', true)->orderBy('name');
+            $query->whereRaw('is_active = true')->orderBy('name');
         }, 'staff' => function($query) {
-            $query->where('is_active', true)->orderBy('name');
+            $query->whereRaw('is_active = true')->orderBy('name');
         }])
             ->where('slug', $salonSlug)
             ->where('id', $widgetSetting->salon_id)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$salon) {
@@ -128,7 +128,7 @@ class WidgetController extends Controller
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -195,7 +195,7 @@ class WidgetController extends Controller
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -265,30 +265,38 @@ class WidgetController extends Controller
             foreach ($serviceIds as $serviceId) {
                 $service = Service::findOrFail($serviceId);
 
+                // Calculate end time for this appointment
+                $timeParts = explode(':', $currentTime);
+                $currentMinutes = (int)$timeParts[0] * 60 + (int)$timeParts[1];
+                $endMinutes = $currentMinutes + $service->duration;
+                $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
+
                 // Create appointment
                 $appointment = Appointment::create([
+                    'client_id' => null,
                     'salon_id' => $request->input('salon_id'),
                     'service_id' => $serviceId,
                     'staff_id' => $request->input('staff_id'),
                     'date' => $request->input('date'),
                     'time' => $currentTime,
+                    'end_time' => $endTime,
                     'status' => 'pending',
-                    'guest_name' => $request->input('guest_name'),
-                    'guest_email' => $request->input('guest_email'),
-                    'guest_phone' => $request->input('guest_phone'),
+                    'client_name' => $request->input('guest_name'),
+                    'client_email' => $request->input('guest_email'),
+                    'client_phone' => $request->input('guest_phone'),
+                    'is_guest' => true,
                     'guest_address' => $request->input('guest_address'),
                     'notes' => $request->input('notes'),
                     'booking_source' => 'widget',
                     'total_price' => $service->discount_price ?? $service->price,
+                    'payment_status' => 'pending',
                 ]);
 
                 $appointments[] = $appointment;
                 $totalPrice += $service->discount_price ?? $service->price;
 
                 // Calculate next service start time
-                $timeParts = explode(':', $currentTime);
-                $nextMinutes = (int)$timeParts[0] * 60 + (int)$timeParts[1] + $service->duration;
-                $currentTime = sprintf('%02d:%02d', floor($nextMinutes / 60), $nextMinutes % 60);
+                $currentTime = $endTime;
             }
 
             // Log booking analytics

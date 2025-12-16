@@ -126,7 +126,7 @@ class SitemapController extends Controller
             }
 
             // Also add locations from Location model
-            $locations = Location::where('is_active', true)
+            $locations = Location::whereRaw('is_active = true')
                 ->whereNotNull('city_slug')
                 ->get();
 
@@ -203,7 +203,7 @@ class SitemapController extends Controller
         $content = Cache::remember('sitemap_staff', 3600, function () {
             $urls = [];
 
-            $staffMembers = Staff::where('is_active', true)
+            $staffMembers = Staff::whereRaw('is_active = true')
                 ->with(['salon' => function ($query) {
                     $query->where('status', 'active')->select('id', 'slug', 'name');
                 }])

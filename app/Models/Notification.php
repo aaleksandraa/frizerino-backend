@@ -48,7 +48,7 @@ class Notification extends Model
      */
     public function scopeUnread($query)
     {
-        return $query->where('is_read', false);
+        return $query->where('is_read', 0);
     }
 
     /**

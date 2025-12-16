@@ -60,7 +60,7 @@ class JobAd extends Model
      */
     public function scopeActive($query)
     {
-        return $query->where('is_active', true)
+        return $query->whereRaw('is_active = true')
             ->where(function ($q) {
                 $q->whereNull('deadline')
                   ->orWhere('deadline', '>=', now()->toDateString());

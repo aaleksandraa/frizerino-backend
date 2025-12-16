@@ -87,9 +87,9 @@ class JobAdController extends Controller
         // Filter by status
         if ($request->has('status')) {
             if ($request->status === 'active') {
-                $query->where('is_active', true);
+                $query->whereRaw('is_active = true');
             } elseif ($request->status === 'inactive') {
-                $query->where('is_active', false);
+                $query->whereRaw('is_active = false');
             } elseif ($request->status === 'expired') {
                 $query->where('deadline', '<', now()->toDateString());
             }

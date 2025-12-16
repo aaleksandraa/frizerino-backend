@@ -165,7 +165,7 @@ class AppointmentService
             // Check for salon vacations
             $salon = $staff->salon;
             $salonVacation = $salon->salonVacations()
-                ->where('is_active', true)
+                ->whereRaw('is_active = true')
                 ->where(function ($query) use ($isoDateString) {
                     $query->whereDate('start_date', '<=', $isoDateString)
                           ->whereDate('end_date', '>=', $isoDateString);
@@ -177,7 +177,7 @@ class AppointmentService
 
             // Check for staff vacations
             $staffVacation = $staff->vacations()
-                ->where('is_active', true)
+                ->whereRaw('is_active = true')
                 ->where(function ($query) use ($isoDateString) {
                     $query->whereDate('start_date', '<=', $isoDateString)
                           ->whereDate('end_date', '>=', $isoDateString);
@@ -235,7 +235,7 @@ class AppointmentService
 
         // Get all active staff from this salon
         $staffMembers = Staff::where('salon_id', $salonId)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->with(['breaks', 'vacations', 'salon.salonBreaks', 'salon.salonVacations'])
             ->get();
 
@@ -252,7 +252,7 @@ class AppointmentService
 
             // Check for salon vacations
             $salonVacation = $staff->salon->salonVacations()
-                ->where('is_active', true)
+                ->whereRaw('is_active = true')
                 ->where(function ($query) use ($isoDate) {
                     $query->whereDate('start_date', '<=', $isoDate)
                           ->whereDate('end_date', '>=', $isoDate);
@@ -264,7 +264,7 @@ class AppointmentService
 
             // Check for staff vacations
             $staffVacation = $staff->vacations()
-                ->where('is_active', true)
+                ->whereRaw('is_active = true')
                 ->where(function ($query) use ($isoDate) {
                     $query->whereDate('start_date', '<=', $isoDate)
                           ->whereDate('end_date', '>=', $isoDate);
@@ -305,7 +305,7 @@ class AppointmentService
         $dayOfWeek = strtolower(Carbon::parse($isoDate)->format('l'));
 
         // Get all salons that have at least one staff working on this day
-        $potentialSalonIds = Staff::where('is_active', true)
+        $potentialSalonIds = Staff::whereRaw('is_active = true')
             ->whereNotNull("working_hours->{$dayOfWeek}")
             ->whereJsonContains("working_hours->{$dayOfWeek}->is_working", true)
             ->distinct()
@@ -348,7 +348,7 @@ class AppointmentService
         // Check for salon vacations
         $salon = $staff->salon;
         $salonVacation = $salon->salonVacations()
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->where(function ($query) use ($isoDate) {
                 $query->whereDate('start_date', '<=', $isoDate)
                       ->whereDate('end_date', '>=', $isoDate);
@@ -360,7 +360,7 @@ class AppointmentService
 
         // Check for staff vacations
         $staffVacation = $staff->vacations()
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->where(function ($query) use ($isoDate) {
                 $query->whereDate('start_date', '<=', $isoDate)
                       ->whereDate('end_date', '>=', $isoDate);

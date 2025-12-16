@@ -27,7 +27,8 @@ class NotificationController extends Controller
 
             // Filter by read status
             if ($request->has('is_read')) {
-                $query->where('is_read', $request->boolean('is_read'));
+                $isRead = $request->boolean('is_read');
+                $query->where('is_read', $isRead ? 1 : 0);
             }
 
             // Filter by type
@@ -71,7 +72,8 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $user->notifications()->update(['is_read' => true]);
+        // Update unread notifications (is_read = 0) to read (is_read = 1)
+        $user->notifications()->where('is_read', 0)->update(['is_read' => 1]);
 
         return response()->json([
             'message' => 'All notifications marked as read',
@@ -87,12 +89,18 @@ class NotificationController extends Controller
             $user = $request->user();
 
             if (!$user) {
+                \Log::warning('Unread count requested without user');
                 return response()->json([
                     'count' => 0,
                 ], 200);
             }
 
             $count = $user->notifications()->unread()->count();
+
+            \Log::info('Unread count requested', [
+                'user_id' => $user->id,
+                'count' => $count,
+            ]);
 
             return response()->json([
                 'count' => $count,

@@ -154,7 +154,7 @@ class Staff extends Model
      */
     public function scopePublic($query)
     {
-        return $query->where('is_public', true)->where('is_active', true);
+        return $query->whereRaw('is_public = true')->whereRaw('is_active = true');
     }
 
     /**
