@@ -181,7 +181,10 @@ class LocationSeeder extends Seeder
             // Use updateOrCreate to make seeder idempotent
             Location::updateOrCreate(
                 ['city_slug' => $citySlug], // Match on city_slug
-                array_merge($location, ['city_slug' => $citySlug]) // Update/create with all data
+                array_merge($location, [
+                    'city_slug' => $citySlug,
+                    'is_active' => true, // All seeded locations are active by default
+                ])
             );
         }
 

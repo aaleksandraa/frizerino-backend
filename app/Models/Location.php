@@ -46,7 +46,8 @@ class Location extends Model
      */
     public function scopeActive($query)
     {
-        return $query->where('is_active', true);
+        // PostgreSQL requires explicit boolean cast
+        return $query->whereRaw('is_active = true');
     }
 
     /**
