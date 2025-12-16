@@ -35,6 +35,7 @@ class AppointmentResource extends JsonResource
             'salon' => $this->when($this->relationLoaded('salon'), function () {
                 return [
                     'id' => $this->salon->id,
+                    'slug' => $this->salon->slug,
                     'name' => $this->salon->name,
                     'address' => $this->salon->address,
                     'city' => $this->salon->city,
