@@ -175,9 +175,16 @@ class LocationSeeder extends Seeder
         ];
 
         foreach ($locations as $location) {
-            Location::create($location);
+            // Generate city_slug from name for unique identification
+            $citySlug = \Illuminate\Support\Str::slug($location['name']);
+
+            // Use updateOrCreate to make seeder idempotent
+            Location::updateOrCreate(
+                ['city_slug' => $citySlug], // Match on city_slug
+                array_merge($location, ['city_slug' => $citySlug]) // Update/create with all data
+            );
         }
 
-        $this->command->info('✅ Uspješno dodano ' . count($locations) . ' lokacija u BiH');
+        $this->command->info('✅ Uspješno dodano/ažurirano ' . count($locations) . ' lokacija u BiH');
     }
 }
