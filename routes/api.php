@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\SalonController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\ServiceImageController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
@@ -181,6 +182,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/salons/{salon}/services/{service}', [ServiceController::class, 'show']);
         Route::put('/salons/{salon}/services/{service}', [ServiceController::class, 'update']);
         Route::delete('/salons/{salon}/services/{service}', [ServiceController::class, 'destroy']);
+
+        // Service image routes
+        Route::post('/services/{service}/images', [ServiceImageController::class, 'store']);
+        Route::put('/services/{service}/images/{image}', [ServiceImageController::class, 'update']);
+        Route::put('/services/{service}/images/reorder', [ServiceImageController::class, 'reorder']);
+        Route::delete('/services/{service}/images/{image}', [ServiceImageController::class, 'destroy']);
 
         // Appointment routes
         Route::get('/appointments', [AppointmentController::class, 'index']);

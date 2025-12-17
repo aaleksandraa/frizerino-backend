@@ -53,6 +53,8 @@ class UpdateSalonRequest extends BaseRequest
             'social_media.instagram' => 'nullable|string',
             'social_media.twitter' => 'nullable|string',
             'auto_confirm' => 'sometimes|boolean',
+            'booking_slot_interval' => 'sometimes|integer|in:15,30,45,60',
+            'show_service_gallery' => 'sometimes|boolean',
         ];
     }
 }

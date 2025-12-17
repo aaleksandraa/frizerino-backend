@@ -18,9 +18,17 @@ class PublicStaffController extends Controller
         $staff = Staff::where('slug', $slug)
             ->whereRaw('is_public = true')
             ->whereRaw('is_active = true')
-            ->with(['salon', 'services', 'portfolio', 'reviews' => function ($query) {
-                $query->whereRaw('is_verified = true')->latest()->take(10);
-            }])
+            ->with([
+                'salon',
+                'services.images' => function ($query) {
+                    $query->orderBy('order');
+                },
+                'services',
+                'portfolio',
+                'reviews' => function ($query) {
+                    $query->whereRaw('is_verified = true')->latest()->take(10);
+                }
+            ])
             ->firstOrFail();
 
         return response()->json([

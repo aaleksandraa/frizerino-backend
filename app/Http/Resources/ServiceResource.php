@@ -36,6 +36,18 @@ class ServiceResource extends JsonResource
             'staff_ids' => $this->when($this->relationLoaded('staff'), function () {
                 return $this->staff->pluck('id');
             }),
+            'images' => $this->when($this->relationLoaded('images'), function () {
+                return $this->images->map(function ($image) {
+                    return [
+                        'id' => $image->id,
+                        'image_url' => $image->image_url,
+                        'title' => $image->title,
+                        'description' => $image->description,
+                        'is_featured' => $image->is_featured,
+                        'order' => $image->order,
+                    ];
+                });
+            }),
             'created_at' => $this->created_at->format('d.m.Y'),
             'updated_at' => $this->updated_at->format('d.m.Y'),
         ];

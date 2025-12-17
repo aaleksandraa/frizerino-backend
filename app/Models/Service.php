@@ -66,6 +66,22 @@ class Service extends Model
     }
 
     /**
+     * Get the images for this service.
+     */
+    public function images(): HasMany
+    {
+        return $this->hasMany(ServiceImage::class)->orderBy('order');
+    }
+
+    /**
+     * Get featured images for this service.
+     */
+    public function featuredImages(): HasMany
+    {
+        return $this->hasMany(ServiceImage::class)->where('is_featured', 1)->orderBy('order');
+    }
+
+    /**
      * Scope a query to only include active services.
      */
     public function scopeActive($query)

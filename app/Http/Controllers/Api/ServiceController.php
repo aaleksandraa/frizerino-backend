@@ -18,7 +18,7 @@ class ServiceController extends Controller
      */
     public function index(Salon $salon): AnonymousResourceCollection
     {
-        $services = $salon->services()->with('staff')->get();
+        $services = $salon->services()->with(['staff', 'images'])->get();
 
         return ServiceResource::collection($services);
     }

@@ -39,6 +39,8 @@ class SalonResource extends JsonResource
             'review_count' => $this->review_count,
             'is_verified' => $this->is_verified,
             'auto_confirm' => $this->auto_confirm,
+            'booking_slot_interval' => $this->booking_slot_interval,
+            'show_service_gallery' => $this->show_service_gallery,
             'status' => $this->status,
             'meta_title' => $this->meta_title,
             'meta_description' => $this->meta_description,

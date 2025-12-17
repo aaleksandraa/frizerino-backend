@@ -247,6 +247,7 @@ class PublicController extends Controller
                 ->with([
                     'images',
                     'services.staff',
+                    'services.images',
                     'staff',
                     'salonBreaks',
                     'salonVacations',
