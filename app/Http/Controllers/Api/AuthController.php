@@ -25,48 +25,40 @@ class AuthController extends Controller
      */
     public function register(Request $request): JsonResponse
     {
-        $rules = [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6|confirmed',
-            'phone' => 'nullable|string|max:50',
-            'role' => 'required|string|in:salon,frizer,klijent',
-            'accept_privacy_policy' => 'required|boolean',
-            'accept_contact_communication' => 'required|boolean',
-        ];
-
-        // Za salone i frizere - dodatni pristanak za javni prikaz podataka
-        if (in_array($request->role, ['salon', 'frizer'])) {
-            $rules['accept_public_data_display'] = 'required|boolean';
-        }
-
-        $messages = [
-            'name.required' => 'Ime i prezime je obavezno.',
-            'name.max' => 'Ime i prezime ne smije biti duže od 255 karaktera.',
-            'email.required' => 'Email adresa je obavezna.',
-            'email.email' => 'Email adresa nije validna.',
-            'email.unique' => 'Ovaj email je već registrovan. Pokušajte se prijaviti ili koristite drugi email.',
-            'password.required' => 'Lozinka je obavezna.',
-            'password.min' => 'Lozinka mora imati najmanje 6 karaktera.',
-            'password.confirmed' => 'Lozinke se ne poklapaju.',
-            'phone.max' => 'Broj telefona ne smije biti duži od 50 karaktera.',
-            'role.required' => 'Tip korisnika je obavezan.',
-            'role.in' => 'Nevažeći tip korisnika.',
-            'accept_privacy_policy.required' => 'Morate prihvatiti pravila privatnosti.',
-            'accept_contact_communication.required' => 'Morate pristati na kontakt komunikaciju.',
-            'accept_public_data_display.required' => 'Morate pristati na javni prikaz podataka.',
-        ];
-
         try {
+            $rules = [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:6|confirmed',
+                'phone' => 'nullable|string|max:50',
+                'role' => 'required|string|in:salon,frizer,klijent',
+                'accept_privacy_policy' => 'required|boolean',
+                'accept_contact_communication' => 'required|boolean',
+            ];
+
+            // Za salone i frizere - dodatni pristanak za javni prikaz podataka
+            if (in_array($request->role, ['salon', 'frizer'])) {
+                $rules['accept_public_data_display'] = 'required|boolean';
+            }
+
+            $messages = [
+                'name.required' => 'Ime i prezime je obavezno.',
+                'name.max' => 'Ime i prezime ne smije biti duže od 255 karaktera.',
+                'email.required' => 'Email adresa je obavezna.',
+                'email.email' => 'Email adresa nije validna.',
+                'email.unique' => 'Ovaj email je već registrovan. Pokušajte se prijaviti ili koristite drugi email.',
+                'password.required' => 'Lozinka je obavezna.',
+                'password.min' => 'Lozinka mora imati najmanje 6 karaktera.',
+                'password.confirmed' => 'Lozinke se ne poklapaju.',
+                'phone.max' => 'Broj telefona ne smije biti duži od 50 karaktera.',
+                'role.required' => 'Tip korisnika je obavezan.',
+                'role.in' => 'Nevažeći tip korisnika.',
+                'accept_privacy_policy.required' => 'Morate prihvatiti pravila privatnosti.',
+                'accept_contact_communication.required' => 'Morate pristati na kontakt komunikaciju.',
+                'accept_public_data_display.required' => 'Morate pristati na javni prikaz podataka.',
+            ];
+
             $validated = $request->validate($rules, $messages);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validacija nije uspjela.',
-                'error_code' => 'VALIDATION_ERROR',
-                'errors' => $e->errors()
-            ], 422);
-        }
 
         // Dodatna provjera da su pristanci zaista true
         if (!$request->accept_privacy_policy) {
@@ -134,17 +126,37 @@ class AuthController extends Controller
             );
         }
 
-        // Pošalji verifikacijski email
-        event(new Registered($user));
+            // Pošalji verifikacijski email
+            event(new Registered($user));
 
-        // NE ulogujemo korisnika - mora prvo verificirati email
-        // Auth::login($user);
+            // NE ulogujemo korisnika - mora prvo verificirati email
+            // Auth::login($user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Registracija uspješna! Provjerite email za potvrdu.',
-            'email_verification_required' => true,
-        ], 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'Registracija uspješna! Provjerite email za potvrdu.',
+                'email_verification_required' => true,
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Laravel će automatski vratiti 422 sa greškama, ali za svaki slučaj
+            return response()->json([
+                'success' => false,
+                'message' => 'Validacija nije uspjela.',
+                'error_code' => 'VALIDATION_ERROR',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            // Log unexpected errors
+            \Log::error('Registration error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Greška pri registraciji. Molimo pokušajte ponovo.',
+                'error_code' => 'SERVER_ERROR'
+            ], 500);
+        }
     }
 
     /**
