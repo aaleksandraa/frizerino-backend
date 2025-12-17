@@ -156,29 +156,77 @@ class SalonController extends Controller
         try {
             Gate::authorize('update', $salon);
 
-            $request->validate([
-                'images' => 'required|array|max:10',
-                'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB max per image
-            ], [
-                'images.required' => 'Morate odabrati najmanje jednu sliku.',
-                'images.array' => 'Slike moraju biti poslane kao niz.',
-                'images.max' => 'Možete uploadovati maksimalno 10 slika odjednom.',
-                'images.*.image' => 'Datoteka mora biti slika.',
-                'images.*.mimes' => 'Slika mora biti u formatu: jpeg, png, jpg ili webp.',
-                'images.*.max' => 'Slika ne smije biti veća od 5MB.',
-            ]);
+            // Check if images were uploaded
+            if (!$request->hasFile('images')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Morate odabrati najmanje jednu sliku.',
+                ], 422);
+            }
+
+            $images = $request->file('images');
+
+            // Ensure images is an array
+            if (!is_array($images)) {
+                $images = [$images];
+            }
+
+            // Validate each image
+            foreach ($images as $index => $image) {
+                if (!$image->isValid()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Greška pri uploadu slike ' . ($index + 1),
+                    ], 422);
+                }
+
+                // Check file size (5MB max)
+                if ($image->getSize() > 5 * 1024 * 1024) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Slika ' . $image->getClientOriginalName() . ' je prevelika. Maksimalna veličina je 5MB.',
+                    ], 422);
+                }
+
+                // Check mime type
+                $allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+                if (!in_array($image->getMimeType(), $allowedMimes)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Slika ' . $image->getClientOriginalName() . ' mora biti u formatu: jpeg, png, jpg ili webp.',
+                    ], 422);
+                }
+            }
+
+            // Check max 10 images
+            if (count($images) > 10) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Možete uploadovati maksimalno 10 slika odjednom.',
+                ], 422);
+            }
 
             $uploadedImages = [];
 
-            foreach ($request->file('images') as $image) {
+            foreach ($images as $image) {
                 $path = $image->store('salons/' . $salon->id, 'public');
 
-                $salonImage = SalonImage::create([
+                // PostgreSQL requires explicit boolean casting - use raw SQL
+                $isPrimary = $salon->images()->count() === 0;
+                $order = $salon->images()->count() + 1;
+
+                // Insert with raw SQL to handle PostgreSQL boolean type
+                $imageId = \DB::table('salon_images')->insertGetId([
                     'salon_id' => $salon->id,
                     'path' => $path,
-                    'order' => $salon->images()->count() + 1,
-                    'is_primary' => $salon->images()->count() === 0,
+                    'order' => $order,
+                    'is_primary' => \DB::raw($isPrimary ? 'true' : 'false'),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
+
+                // Load the created image
+                $salonImage = SalonImage::find($imageId);
 
                 // Explicitly include URL in response
                 $uploadedImages[] = [

@@ -41,15 +41,21 @@ class ServiceImageController extends Controller
         // Store the image
         $path = $request->file('image')->store('services', 'public');
 
-        // Create the service image record
-        $serviceImage = ServiceImage::create([
+        // PostgreSQL requires explicit boolean - use raw SQL
+        $isFeatured = $request->input('is_featured', false);
+
+        $imageId = \DB::table('service_images')->insertGetId([
             'service_id' => $service->id,
             'image_path' => $path,
             'title' => $request->input('title'),
             'description' => $request->input('description'),
             'order' => $maxOrder + 1,
-            'is_featured' => $request->input('is_featured', false) ? 1 : 0,
+            'is_featured' => \DB::raw($isFeatured ? 'true' : 'false'),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+
+        $serviceImage = ServiceImage::find($imageId);
 
         return response()->json([
             'message' => 'Image uploaded successfully',
@@ -82,13 +88,24 @@ class ServiceImageController extends Controller
             ], 422);
         }
 
-        $image->update([
+        // PostgreSQL requires explicit boolean - use raw SQL for update
+        $updateData = [
             'title' => $request->input('title', $image->title),
             'description' => $request->input('description', $image->description),
-            'is_featured' => $request->has('is_featured')
-                ? ($request->input('is_featured') ? 1 : 0)
-                : $image->is_featured,
-        ]);
+            'updated_at' => now(),
+        ];
+
+        if ($request->has('is_featured')) {
+            $isFeatured = $request->input('is_featured');
+            $updateData['is_featured'] = \DB::raw($isFeatured ? 'true' : 'false');
+        }
+
+        \DB::table('service_images')
+            ->where('id', $image->id)
+            ->update($updateData);
+
+        // Reload the image
+        $image = ServiceImage::find($image->id);
 
         return response()->json([
             'message' => 'Image updated successfully',
