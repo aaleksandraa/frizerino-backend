@@ -70,7 +70,7 @@ class UserConsent extends Model
                 'consent_type' => $consentType,
             ],
             [
-                'accepted' => $accepted,
+                'accepted' => (bool) $accepted, // Explicitly cast to boolean for PostgreSQL
                 'version' => self::CURRENT_VERSION,
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
