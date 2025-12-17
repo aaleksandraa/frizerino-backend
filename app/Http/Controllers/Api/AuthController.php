@@ -60,71 +60,71 @@ class AuthController extends Controller
 
             $validated = $request->validate($rules, $messages);
 
-        // Dodatna provjera da su pristanci zaista true
-        if (!$request->accept_privacy_policy) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Morate prihvatiti pravila privatnosti.',
-                'errors' => ['accept_privacy_policy' => ['Morate prihvatiti pravila privatnosti.']]
-            ], 422);
-        }
+            // Dodatna provjera da su pristanci zaista true
+            if (!$request->accept_privacy_policy) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Morate prihvatiti pravila privatnosti.',
+                    'errors' => ['accept_privacy_policy' => ['Morate prihvatiti pravila privatnosti.']]
+                ], 422);
+            }
 
-        if (!$request->accept_contact_communication) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Morate pristati na kontakt komunikaciju.',
-                'errors' => ['accept_contact_communication' => ['Morate pristati na kontakt komunikaciju.']]
-            ], 422);
-        }
+            if (!$request->accept_contact_communication) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Morate pristati na kontakt komunikaciju.',
+                    'errors' => ['accept_contact_communication' => ['Morate pristati na kontakt komunikaciju.']]
+                ], 422);
+            }
 
-        if (in_array($request->role, ['salon', 'frizer']) && !$request->accept_public_data_display) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Morate pristati na javni prikaz podataka.',
-                'errors' => ['accept_public_data_display' => ['Morate pristati na javni prikaz podataka.']]
-            ], 422);
-        }
+            if (in_array($request->role, ['salon', 'frizer']) && !$request->accept_public_data_display) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Morate pristati na javni prikaz podataka.',
+                    'errors' => ['accept_public_data_display' => ['Morate pristati na javni prikaz podataka.']]
+                ], 422);
+            }
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'role' => $request->role,
-            'password' => Hash::make($request->password),
-        ]);
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'role' => $request->role,
+                'password' => Hash::make($request->password),
+            ]);
 
-        // Snimi pristanke
-        $ipAddress = $request->ip();
-        $userAgent = $request->userAgent();
+            // Snimi pristanke
+            $ipAddress = $request->ip();
+            $userAgent = $request->userAgent();
 
-        // Pravila privatnosti - obavezno za sve
-        UserConsent::recordConsent(
-            $user->id,
-            UserConsent::TYPE_PRIVACY_POLICY,
-            true,
-            $ipAddress,
-            $userAgent
-        );
-
-        // Kontakt komunikacija - obavezno za sve
-        UserConsent::recordConsent(
-            $user->id,
-            UserConsent::TYPE_CONTACT_COMMUNICATION,
-            true,
-            $ipAddress,
-            $userAgent
-        );
-
-        // Javni prikaz podataka - samo za salone i frizere
-        if (in_array($request->role, ['salon', 'frizer'])) {
+            // Pravila privatnosti - obavezno za sve
             UserConsent::recordConsent(
                 $user->id,
-                UserConsent::TYPE_PUBLIC_DATA_DISPLAY,
+                UserConsent::TYPE_PRIVACY_POLICY,
                 true,
                 $ipAddress,
                 $userAgent
             );
-        }
+
+            // Kontakt komunikacija - obavezno za sve
+            UserConsent::recordConsent(
+                $user->id,
+                UserConsent::TYPE_CONTACT_COMMUNICATION,
+                true,
+                $ipAddress,
+                $userAgent
+            );
+
+            // Javni prikaz podataka - samo za salone i frizere
+            if (in_array($request->role, ['salon', 'frizer'])) {
+                UserConsent::recordConsent(
+                    $user->id,
+                    UserConsent::TYPE_PUBLIC_DATA_DISPLAY,
+                    true,
+                    $ipAddress,
+                    $userAgent
+                );
+            }
 
             // Pošalji verifikacijski email
             event(new Registered($user));
@@ -146,15 +146,36 @@ class AuthController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            // Log unexpected errors
+            // Log unexpected errors with full details
             \Log::error('Registration error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => [
+                    'name' => $request->name ?? 'N/A',
+                    'email' => $request->email ?? 'N/A',
+                    'role' => $request->role ?? 'N/A',
+                ]
             ]);
+
+            // In development, show detailed error
+            $message = 'Greška pri registraciji. Molimo pokušajte ponovo.';
+            $debug = null;
+
+            if (config('app.debug')) {
+                $debug = [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ];
+            }
 
             return response()->json([
                 'success' => false,
-                'message' => 'Greška pri registraciji. Molimo pokušajte ponovo.',
-                'error_code' => 'SERVER_ERROR'
+                'message' => $message,
+                'error_code' => 'SERVER_ERROR',
+                'debug' => $debug
             ], 500);
         }
     }
