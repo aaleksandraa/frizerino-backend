@@ -153,42 +153,70 @@ class SalonController extends Controller
      */
     public function uploadImages(Request $request, Salon $salon): JsonResponse
     {
-        Gate::authorize('update', $salon);
+        try {
+            Gate::authorize('update', $salon);
 
-        $request->validate([
-            'images' => 'required|array|max:10',
-            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB max per image
-        ]);
-
-        $uploadedImages = [];
-
-        foreach ($request->file('images') as $image) {
-            $path = $image->store('salons/' . $salon->id, 'public');
-
-            $salonImage = SalonImage::create([
-                'salon_id' => $salon->id,
-                'path' => $path,
-                'order' => $salon->images()->count() + 1,
-                'is_primary' => $salon->images()->count() === 0,
+            $request->validate([
+                'images' => 'required|array|max:10',
+                'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 5MB max per image
+            ], [
+                'images.required' => 'Morate odabrati najmanje jednu sliku.',
+                'images.array' => 'Slike moraju biti poslane kao niz.',
+                'images.max' => 'Možete uploadovati maksimalno 10 slika odjednom.',
+                'images.*.image' => 'Datoteka mora biti slika.',
+                'images.*.mimes' => 'Slika mora biti u formatu: jpeg, png, jpg ili webp.',
+                'images.*.max' => 'Slika ne smije biti veća od 5MB.',
             ]);
 
-            // Explicitly include URL in response
-            $uploadedImages[] = [
-                'id' => $salonImage->id,
-                'path' => $salonImage->path,
-                'url' => $salonImage->url,
-                'is_primary' => $salonImage->is_primary,
-                'order' => $salonImage->order,
-            ];
+            $uploadedImages = [];
+
+            foreach ($request->file('images') as $image) {
+                $path = $image->store('salons/' . $salon->id, 'public');
+
+                $salonImage = SalonImage::create([
+                    'salon_id' => $salon->id,
+                    'path' => $path,
+                    'order' => $salon->images()->count() + 1,
+                    'is_primary' => $salon->images()->count() === 0,
+                ]);
+
+                // Explicitly include URL in response
+                $uploadedImages[] = [
+                    'id' => $salonImage->id,
+                    'path' => $salonImage->path,
+                    'url' => $salonImage->url,
+                    'is_primary' => $salonImage->is_primary,
+                    'order' => $salonImage->order,
+                ];
+            }
+
+            // Invalidate salon cache after image upload
+            $this->cacheService->invalidateSalonCache($salon->id);
+
+            return response()->json([
+                'message' => 'Images uploaded successfully',
+                'images' => $uploadedImages,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validacija nije uspjela.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error uploading salon images: ' . $e->getMessage(), [
+                'salon_id' => $salon->id,
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Greška prilikom uploada slika. Molimo pokušajte ponovo.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
         }
-
-        // Invalidate salon cache after image upload
-        $this->cacheService->invalidateSalonCache($salon->id);
-
-        return response()->json([
-            'message' => 'Images uploaded successfully',
-            'images' => $uploadedImages,
-        ]);
     }
 
     /**
