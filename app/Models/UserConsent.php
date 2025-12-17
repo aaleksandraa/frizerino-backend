@@ -47,6 +47,27 @@ class UserConsent extends Model
     ];
 
     /**
+     * Boot method to handle PostgreSQL boolean casting
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Ensure boolean values are properly cast for PostgreSQL
+        static::creating(function ($model) {
+            if (isset($model->accepted)) {
+                $model->accepted = (bool) $model->accepted;
+            }
+        });
+
+        static::updating(function ($model) {
+            if (isset($model->accepted)) {
+                $model->accepted = (bool) $model->accepted;
+            }
+        });
+    }
+
+    /**
      * Get the user that owns the consent.
      */
     public function user(): BelongsTo
@@ -64,13 +85,46 @@ class UserConsent extends Model
         ?string $ipAddress = null,
         ?string $userAgent = null
     ): self {
-        $consent = self::updateOrCreate(
+        // For PostgreSQL, use raw SQL with proper boolean handling
+        if (\DB::getDriverName() === 'pgsql') {
+            $acceptedBool = $accepted ? 'true' : 'false';
+            $acceptedAtSql = $accepted ? "'" . now()->toDateTimeString() . "'" : 'NULL';
+            $revokedAtSql = !$accepted ? "'" . now()->toDateTimeString() . "'" : 'NULL';
+            $ipAddressSql = $ipAddress ? "'" . addslashes($ipAddress) . "'" : 'NULL';
+            $userAgentSql = $userAgent ? "'" . addslashes($userAgent) . "'" : 'NULL';
+
+            $sql = "INSERT INTO user_consents (user_id, consent_type, accepted, version, ip_address, user_agent, accepted_at, revoked_at, created_at, updated_at)
+                    VALUES (?, ?, {$acceptedBool}, ?, {$ipAddressSql}, {$userAgentSql}, {$acceptedAtSql}, {$revokedAtSql}, ?, ?)
+                    ON CONFLICT (user_id, consent_type)
+                    DO UPDATE SET
+                        accepted = EXCLUDED.accepted,
+                        version = EXCLUDED.version,
+                        ip_address = EXCLUDED.ip_address,
+                        user_agent = EXCLUDED.user_agent,
+                        accepted_at = EXCLUDED.accepted_at,
+                        revoked_at = EXCLUDED.revoked_at,
+                        updated_at = EXCLUDED.updated_at
+                    RETURNING id";
+
+            $result = \DB::select($sql, [
+                $userId,
+                $consentType,
+                self::CURRENT_VERSION,
+                now()->toDateTimeString(),
+                now()->toDateTimeString()
+            ]);
+
+            return self::find($result[0]->id);
+        }
+
+        // For other databases, use standard Eloquent
+        return self::updateOrCreate(
             [
                 'user_id' => $userId,
                 'consent_type' => $consentType,
             ],
             [
-                'accepted' => (bool) $accepted, // Explicitly cast to boolean for PostgreSQL
+                'accepted' => $accepted,
                 'version' => self::CURRENT_VERSION,
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
@@ -78,8 +132,6 @@ class UserConsent extends Model
                 'revoked_at' => !$accepted ? now() : null,
             ]
         );
-
-        return $consent;
     }
 
     /**

@@ -29,7 +29,7 @@ class AuthController extends Controller
             $rules = [
                 'name' => 'required|string|max:255',
                 'email' => 'required|string|email|max:255|unique:users',
-                'password' => 'required|string|min:6|confirmed',
+                'password' => ['required', 'string', 'confirmed', new \App\Rules\StrongPassword()],
                 'phone' => 'nullable|string|max:50',
                 'role' => 'required|string|in:salon,frizer,klijent',
                 'accept_privacy_policy' => 'required|boolean',
