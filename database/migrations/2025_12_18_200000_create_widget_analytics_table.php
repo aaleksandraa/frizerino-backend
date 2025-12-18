@@ -19,7 +19,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('salon_id')->nullable()->constrained('salons')->onDelete('cascade');
             $table->foreignId('widget_setting_id')->nullable()->constrained('widget_settings')->onDelete('cascade');
-            $table->string('event_type', 50); // view, booking, error, interaction
+            $table->string('event_type', 50);
             $table->string('referrer_domain')->nullable();
             $table->string('referrer_url')->nullable();
             $table->string('ip_address', 45)->nullable();
@@ -27,7 +27,6 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamp('created_at')->useCurrent();
 
-            // Indexes for analytics queries
             $table->index('salon_id');
             $table->index('widget_setting_id');
             $table->index('event_type');
