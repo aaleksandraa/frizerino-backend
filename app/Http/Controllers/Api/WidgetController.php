@@ -35,20 +35,19 @@ class WidgetController extends Controller
     {
         $apiKey = $request->query('key');
 
-        // Validate API key
         if (!$apiKey) {
             return response()->json(['error' => 'API key is required'], 401);
         }
 
+        // PostgreSQL requires DB::raw('true') for boolean columns
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', DB::raw('true'))
             ->first();
 
         if (!$widgetSetting) {
             return response()->json(['error' => 'Invalid or inactive API key'], 401);
         }
 
-        // Validate domain (if whitelist is set)
         $referer = $request->headers->get('referer');
         $domain = $referer ? parse_url($referer, PHP_URL_HOST) : null;
 
@@ -60,11 +59,11 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Domain not allowed'], 403);
         }
 
-        // Get salon data
+        // PostgreSQL requires DB::raw('true') for boolean columns
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', true)->orderBy('name');
+            $query->where('is_active', DB::raw('true'))->orderBy('name');
         }, 'staff' => function($query) {
-            $query->where('is_active', true)->orderBy('name');
+            $query->where('is_active', DB::raw('true'))->orderBy('name');
         }])
             ->where('slug', $salonSlug)
             ->where('id', $widgetSetting->salon_id)
@@ -79,10 +78,7 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Salon not found or inactive'], 404);
         }
 
-        // Log view analytics
         $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_VIEW, $request, [], $widgetSetting->id);
-
-        // Update last used timestamp
         $widgetSetting->update(['last_used_at' => now()]);
 
         return response()->json([
@@ -113,7 +109,6 @@ class WidgetController extends Controller
             'staff' => $salon->staff->map(function($staff) {
                 $avatarUrl = null;
                 if ($staff->avatar) {
-                    // Ensure full URL for avatar
                     $avatarUrl = str_starts_with($staff->avatar, 'http')
                         ? $staff->avatar
                         : config('app.url') . '/storage/' . $staff->avatar;
@@ -135,22 +130,19 @@ class WidgetController extends Controller
 
     /**
      * Get available time slots for multiple services
-     * Uses the same professional logic as the main booking system
      */
     public function availableSlots(Request $request): JsonResponse
     {
         $apiKey = $request->input('key');
 
-        // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', DB::raw('true'))
             ->first();
 
         if (!$widgetSetting) {
             return response()->json(['error' => 'Invalid API key'], 401);
         }
 
-        // Validate domain
         $referer = $request->headers->get('referer');
         $domain = $referer ? parse_url($referer, PHP_URL_HOST) : null;
 
@@ -173,12 +165,10 @@ class WidgetController extends Controller
         $staffId = $request->input('staff_id');
         $staff = Staff::findOrFail($staffId);
 
-        // Verify staff belongs to widget's salon
         if ($staff->salon_id != $widgetSetting->salon_id) {
             return response()->json(['error' => 'Invalid staff for this salon'], 403);
         }
 
-        // Build services array for SalonService
         $servicesData = array_map(function($service) use ($staffId) {
             return [
                 'serviceId' => $service['serviceId'],
@@ -187,7 +177,6 @@ class WidgetController extends Controller
             ];
         }, $request->input('services'));
 
-        // Use the professional SalonService for slot calculation
         $salon = Salon::findOrFail($widgetSetting->salon_id);
         $salonService = app(\App\Services\SalonService::class);
 
@@ -202,22 +191,19 @@ class WidgetController extends Controller
 
     /**
      * Book appointment(s) via widget
-     * Supports multiple services with the same staff member
      */
     public function book(Request $request): JsonResponse
     {
         $apiKey = $request->input('api_key');
 
-        // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', DB::raw('true'))
             ->first();
 
         if (!$widgetSetting) {
             return response()->json(['error' => 'Invalid API key'], 401);
         }
 
-        // Validate domain
         $referer = $request->headers->get('referer');
         $domain = $referer ? parse_url($referer, PHP_URL_HOST) : null;
 
@@ -229,7 +215,6 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Domain not allowed'], 403);
         }
 
-        // Validate request - supports both single service and multiple services
         $validator = Validator::make($request->all(), [
             'salon_id' => 'required|integer|exists:salons,id',
             'staff_id' => 'required|integer|exists:staff,id',
@@ -240,7 +225,6 @@ class WidgetController extends Controller
             'guest_phone' => 'required|string|min:8|max:20',
             'guest_address' => 'required|string|max:255|min:5',
             'notes' => 'nullable|string|max:1000',
-            // Support both single service_id and services array
             'service_id' => 'required_without:services|integer|exists:services,id',
             'services' => 'required_without:service_id|array|min:1',
             'services.*.id' => 'required_with:services|exists:services,id',
@@ -253,7 +237,6 @@ class WidgetController extends Controller
             ], 422);
         }
 
-        // Verify salon_id matches widget
         if ($request->input('salon_id') != $widgetSetting->salon_id) {
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Invalid salon',
@@ -261,7 +244,6 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Invalid salon'], 403);
         }
 
-        // Verify staff belongs to widget's salon
         $staff = Staff::findOrFail($request->input('staff_id'));
         if ($staff->salon_id != $widgetSetting->salon_id) {
             return response()->json(['error' => 'Invalid staff for this salon'], 403);
@@ -272,16 +254,10 @@ class WidgetController extends Controller
             $currentTime = $request->input('time');
             $totalPrice = 0;
 
-            // Get salon for auto_confirm setting
             $salon = Salon::findOrFail($request->input('salon_id'));
-
-            // Determine initial status based on salon/staff auto_confirm setting
             $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
-
-            // Convert European date format to ISO format for database
             $dateForDb = Carbon::createFromFormat('d.m.Y', $request->input('date'))->format('Y-m-d');
 
-            // Get service IDs - support both formats
             $serviceIds = $request->has('services')
                 ? array_column($request->input('services'), 'id')
                 : [$request->input('service_id')];
@@ -289,13 +265,11 @@ class WidgetController extends Controller
             foreach ($serviceIds as $serviceId) {
                 $service = Service::findOrFail($serviceId);
 
-                // Calculate end time for this appointment
                 $timeParts = explode(':', $currentTime);
                 $currentMinutes = (int)$timeParts[0] * 60 + (int)$timeParts[1];
                 $endMinutes = $currentMinutes + $service->duration;
                 $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
 
-                // Create appointment
                 $appointment = Appointment::create([
                     'client_id' => null,
                     'salon_id' => $request->input('salon_id'),
@@ -319,14 +293,10 @@ class WidgetController extends Controller
                 $appointments[] = $appointment;
                 $totalPrice += $service->discount_price ?? $service->price;
 
-                // Send notifications for each appointment
                 $this->notificationService->sendNewAppointmentNotifications($appointment);
-
-                // Calculate next service start time
                 $currentTime = $endTime;
             }
 
-            // Send confirmation email to guest (only once for all appointments)
             $guestEmail = $request->input('guest_email');
             if ($guestEmail && count($appointments) > 0) {
                 try {
@@ -336,7 +306,6 @@ class WidgetController extends Controller
                 }
             }
 
-            // Log booking analytics
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_BOOKING, $request, [
                 'appointment_ids' => array_map(fn($a) => $a->id, $appointments),
                 'service_ids' => $serviceIds,
@@ -344,7 +313,6 @@ class WidgetController extends Controller
                 'total_price' => $totalPrice,
             ], $widgetSetting->id);
 
-            // Increment booking counter
             $widgetSetting->increment('total_bookings', count($appointments));
 
             return response()->json([
@@ -403,9 +371,7 @@ class WidgetController extends Controller
                 'metadata' => $metadata,
             ]);
         } catch (\Exception $e) {
-            // Silently fail - don't break widget for analytics errors
             Log::warning('Widget analytics log failed: ' . $e->getMessage());
         }
     }
-
 }
