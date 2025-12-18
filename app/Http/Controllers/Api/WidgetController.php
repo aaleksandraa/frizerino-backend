@@ -11,12 +11,23 @@ use App\Models\WidgetAnalytics;
 use App\Models\Appointment;
 use App\Models\Service;
 use App\Models\Staff;
+use App\Services\NotificationService;
+use App\Mail\AppointmentConfirmationMail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class WidgetController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * Get widget data (salon, services, staff)
      */
@@ -100,11 +111,18 @@ class WidgetController extends Controller
                 ];
             }),
             'staff' => $salon->staff->map(function($staff) {
+                $avatarUrl = null;
+                if ($staff->avatar) {
+                    // Ensure full URL for avatar
+                    $avatarUrl = str_starts_with($staff->avatar, 'http')
+                        ? $staff->avatar
+                        : config('app.url') . '/storage/' . $staff->avatar;
+                }
                 return [
                     'id' => $staff->id,
                     'name' => $staff->name,
                     'role' => $staff->role,
-                    'avatar' => $staff->avatar,
+                    'avatar' => $avatarUrl,
                     'bio' => $staff->bio,
                     'rating' => $staff->rating,
                     'review_count' => $staff->review_count,
@@ -254,6 +272,15 @@ class WidgetController extends Controller
             $currentTime = $request->input('time');
             $totalPrice = 0;
 
+            // Get salon for auto_confirm setting
+            $salon = Salon::findOrFail($request->input('salon_id'));
+
+            // Determine initial status based on salon/staff auto_confirm setting
+            $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
+
+            // Convert European date format to ISO format for database
+            $dateForDb = Carbon::createFromFormat('d.m.Y', $request->input('date'))->format('Y-m-d');
+
             // Get service IDs - support both formats
             $serviceIds = $request->has('services')
                 ? array_column($request->input('services'), 'id')
@@ -274,14 +301,14 @@ class WidgetController extends Controller
                     'salon_id' => $request->input('salon_id'),
                     'service_id' => $serviceId,
                     'staff_id' => $request->input('staff_id'),
-                    'date' => $request->input('date'),
+                    'date' => $dateForDb,
                     'time' => $currentTime,
                     'end_time' => $endTime,
-                    'status' => 'pending',
+                    'status' => $initialStatus,
                     'client_name' => $request->input('guest_name'),
                     'client_email' => $request->input('guest_email'),
                     'client_phone' => $request->input('guest_phone'),
-                    'is_guest' => true,
+                    'is_guest' => DB::raw('true'),
                     'guest_address' => $request->input('guest_address'),
                     'notes' => $request->input('notes'),
                     'booking_source' => 'widget',
@@ -292,8 +319,21 @@ class WidgetController extends Controller
                 $appointments[] = $appointment;
                 $totalPrice += $service->discount_price ?? $service->price;
 
+                // Send notifications for each appointment
+                $this->notificationService->sendNewAppointmentNotifications($appointment);
+
                 // Calculate next service start time
                 $currentTime = $endTime;
+            }
+
+            // Send confirmation email to guest (only once for all appointments)
+            $guestEmail = $request->input('guest_email');
+            if ($guestEmail && count($appointments) > 0) {
+                try {
+                    Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointments[0]));
+                } catch (\Exception $e) {
+                    Log::warning('Widget: Failed to send confirmation email: ' . $e->getMessage());
+                }
             }
 
             // Log booking analytics
@@ -313,12 +353,13 @@ class WidgetController extends Controller
                 'appointments' => array_map(function($apt) {
                     return [
                         'id' => $apt->id,
-                        'date' => $apt->date,
+                        'date' => Carbon::parse($apt->date)->format('d.m.Y'),
                         'time' => $apt->time,
                         'status' => $apt->status,
                     ];
                 }, $appointments),
                 'total_price' => $totalPrice,
+                'status' => $initialStatus,
             ], 201);
 
         } catch (\Exception $e) {
