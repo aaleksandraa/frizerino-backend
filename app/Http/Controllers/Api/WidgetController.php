@@ -250,17 +250,50 @@ class WidgetController extends Controller
         }
 
         try {
-            $appointments = [];
-            $currentTime = $request->input('time');
-            $totalPrice = 0;
-
             $salon = Salon::findOrFail($request->input('salon_id'));
-            $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
             $dateForDb = Carbon::createFromFormat('d.m.Y', $request->input('date'))->format('Y-m-d');
+            $startTime = $request->input('time');
 
             $serviceIds = $request->has('services')
                 ? array_column($request->input('services'), 'id')
                 : [$request->input('service_id')];
+
+            // Calculate total duration for all services
+            $totalDuration = 0;
+            foreach ($serviceIds as $serviceId) {
+                $service = Service::findOrFail($serviceId);
+                $totalDuration += $service->duration;
+            }
+
+            // Calculate end time for all services combined
+            $startParts = explode(':', $startTime);
+            $startMinutes = (int)$startParts[0] * 60 + (int)$startParts[1];
+            $totalEndMinutes = $startMinutes + $totalDuration;
+            $totalEndTime = sprintf('%02d:%02d', floor($totalEndMinutes / 60), $totalEndMinutes % 60);
+
+            // CRITICAL: Check for overlapping appointments BEFORE creating
+            $overlappingAppointment = Appointment::where('staff_id', $request->input('staff_id'))
+                ->where('date', $dateForDb)
+                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->where(function($query) use ($startTime, $totalEndTime) {
+                    // Check if new appointment overlaps with any existing appointment
+                    // Overlap occurs when: new_start < existing_end AND new_end > existing_start
+                    $query->whereRaw("? < end_time AND ? > time", [$startTime, $totalEndTime]);
+                })
+                ->first();
+
+            if ($overlappingAppointment) {
+                return response()->json([
+                    'error' => 'Žao nam je, neko se u međuvremenu zakazao u to vrijeme. Molimo odaberite drugo vrijeme.',
+                    'code' => 'TIME_SLOT_TAKEN',
+                    'redirect_to_time' => true
+                ], 409); // 409 Conflict
+            }
+
+            $appointments = [];
+            $currentTime = $startTime;
+            $totalPrice = 0;
+            $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
 
             foreach ($serviceIds as $serviceId) {
                 $service = Service::findOrFail($serviceId);
