@@ -14,8 +14,10 @@ class WidgetAnalytics extends Model
 
     protected $fillable = [
         'salon_id',
+        'widget_setting_id',
         'event_type',
         'referrer_domain',
+        'referrer_url',
         'ip_address',
         'user_agent',
         'metadata',
@@ -32,6 +34,14 @@ class WidgetAnalytics extends Model
     public function salon(): BelongsTo
     {
         return $this->belongsTo(Salon::class);
+    }
+
+    /**
+     * Get the widget setting
+     */
+    public function widgetSetting(): BelongsTo
+    {
+        return $this->belongsTo(WidgetSetting::class);
     }
 
     /**
