@@ -11,6 +11,7 @@ use App\Models\WidgetAnalytics;
 use App\Models\Appointment;
 use App\Models\Service;
 use App\Models\Staff;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 
@@ -29,7 +30,7 @@ class WidgetController extends Controller
         }
 
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', DB::raw('true'))
             ->first();
 
         if (!$widgetSetting) {
@@ -50,9 +51,9 @@ class WidgetController extends Controller
 
         // Get salon data
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', true)->orderBy('name');
+            $query->where('is_active', DB::raw('true'))->orderBy('name');
         }, 'staff' => function($query) {
-            $query->where('is_active', true)->orderBy('name');
+            $query->where('is_active', DB::raw('true'))->orderBy('name');
         }])
             ->where('slug', $salonSlug)
             ->where('id', $widgetSetting->salon_id)
@@ -124,7 +125,7 @@ class WidgetController extends Controller
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', DB::raw('true'))
             ->first();
 
         if (!$widgetSetting) {
@@ -191,7 +192,7 @@ class WidgetController extends Controller
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', DB::raw('true'))
             ->first();
 
         if (!$widgetSetting) {
