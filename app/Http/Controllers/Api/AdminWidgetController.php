@@ -264,50 +264,80 @@ class AdminWidgetController extends Controller
         $salon = $widget->salon;
         $salonSlug = $salon->slug ?? $salon->id;
         $frontendUrl = config('app.frontend_url', 'https://frizerino.com');
+        $theme = $widget->theme ?? [];
+        $primaryColor = $theme['primaryColor'] ?? '#FF6B35';
 
-        $iframeCode = <<<HTML
-<!-- Frizerino Booking Widget -->
-<iframe
-  src="{$frontendUrl}/widget/{$salonSlug}?key={$widget->api_key}"
-  width="100%"
-  height="700"
-  frameborder="0"
-  style="border: none; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 600px;"
-  title="Rezervacija termina - {$salon->name}"
-  loading="lazy"
-></iframe>
-HTML;
-
-        $javascriptCode = <<<HTML
-<!-- Frizerino Booking Widget -->
-<div id="frizerino-booking-widget"></div>
-<script>
-  (function() {
-    var iframe = document.createElement('iframe');
-    iframe.src = '{$frontendUrl}/widget/{$salonSlug}?key={$widget->api_key}';
-    iframe.width = '100%';
-    iframe.height = '700';
-    iframe.frameBorder = '0';
-    iframe.style.border = 'none';
-    iframe.style.borderRadius = '12px';
-    iframe.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-    iframe.style.maxWidth = '600px';
-    iframe.title = 'Rezervacija termina - {$salon->name}';
-    iframe.loading = 'lazy';
-
-    var container = document.getElementById('frizerino-booking-widget');
-    if (container) {
-      container.appendChild(iframe);
-    }
-  })();
+        // Professional JavaScript Widget (Recommended)
+        $jsWidgetCode = <<<HTML
+<!-- Frizerino Booking Widget - Professional -->
+<div id="frizerino-widget"></div>
+<script
+  src="{$frontendUrl}/widget.js"
+  data-salon="{$salonSlug}"
+  data-key="{$widget->api_key}"
+  data-primary-color="{$primaryColor}"
+  data-theme="light"
+  data-button-text="Rezerviši termin">
 </script>
 HTML;
 
+        // Dark theme variant
+        $jsWidgetDarkCode = <<<HTML
+<!-- Frizerino Booking Widget - Dark Theme -->
+<div id="frizerino-widget"></div>
+<script
+  src="{$frontendUrl}/widget.js"
+  data-salon="{$salonSlug}"
+  data-key="{$widget->api_key}"
+  data-primary-color="{$primaryColor}"
+  data-theme="dark"
+  data-button-text="Rezerviši termin">
+</script>
+HTML;
+
+        // Custom styling example
+        $jsWidgetCustomCode = <<<HTML
+<!-- Frizerino Booking Widget - Custom Styling -->
+<div id="frizerino-widget"></div>
+<script
+  src="{$frontendUrl}/widget.js"
+  data-salon="{$salonSlug}"
+  data-key="{$widget->api_key}"
+  data-primary-color="#YOUR_COLOR"
+  data-theme="light"
+  data-button-text="Book Now"
+  data-button-radius="24px"
+  data-font="Arial, sans-serif">
+</script>
+
+<!-- Customization Options:
+  data-primary-color: Main color (hex, e.g. #FF6B35)
+  data-theme: "light" or "dark"
+  data-button-text: Button text
+  data-button-radius: Button border radius
+  data-font: Font family
+  data-container: Custom container ID (default: frizerino-widget)
+-->
+HTML;
+
         return [
-            'iframe' => $iframeCode,
-            'javascript' => $javascriptCode,
+            'javascript' => $jsWidgetCode,
+            'javascript_dark' => $jsWidgetDarkCode,
+            'javascript_custom' => $jsWidgetCustomCode,
             'api_key' => $widget->api_key,
-            'widget_url' => "{$frontendUrl}/widget/{$salonSlug}?key={$widget->api_key}",
+            'widget_url' => "{$frontendUrl}/widget.js",
+            'salon_slug' => $salonSlug,
+            'customization' => [
+                'primary_color' => $primaryColor,
+                'available_options' => [
+                    'data-primary-color' => 'Main color (hex)',
+                    'data-theme' => 'light or dark',
+                    'data-button-text' => 'Button text',
+                    'data-button-radius' => 'Border radius (e.g. 8px, 24px)',
+                    'data-font' => 'Font family',
+                    'data-container' => 'Custom container ID',
+                ],
+            ],
         ];
     }
 }
