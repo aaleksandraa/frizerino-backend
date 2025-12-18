@@ -40,8 +40,10 @@ Route::prefix('v1')->group(function () {
         ->name('verification.verify');
 
     // Resend verification email (public - for users who can't login)
+    // Note: This route MUST be accessible without authentication
     Route::post('/email/resend', [AuthController::class, 'resendVerificationEmail'])
-        ->middleware('throttle:6,1');
+        ->middleware(['throttle:6,1'])
+        ->withoutMiddleware(['auth:sanctum']); // Explicitly allow unauthenticated access
 
     // Password reset routes (public)
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
@@ -141,8 +143,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/user/profile', [AuthController::class, 'updateProfile']);
         Route::put('/user/password', [AuthController::class, 'changePassword']);
         Route::post('/user/avatar', [AuthController::class, 'uploadAvatar']);
-        Route::post('/email/resend', [AuthController::class, 'resendVerificationEmail'])
-            ->middleware('throttle:6,1');
+        // Note: /email/resend is defined as public route above (line 43)
         Route::get('/user/favorites', [FavoriteController::class, 'index']);
         Route::post('/user/favorites/{salon}', [FavoriteController::class, 'store']);
         Route::delete('/user/favorites/{salon}', [FavoriteController::class, 'destroy']);
