@@ -41,7 +41,7 @@ class WidgetController extends Controller
         }
 
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', DB::raw('true'))
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -62,9 +62,9 @@ class WidgetController extends Controller
 
         // Get salon data
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', DB::raw('true'))->orderBy('name');
+            $query->where('is_active', true)->orderBy('name');
         }, 'staff' => function($query) {
-            $query->where('is_active', DB::raw('true'))->orderBy('name');
+            $query->where('is_active', true)->orderBy('name');
         }])
             ->where('slug', $salonSlug)
             ->where('id', $widgetSetting->salon_id)
@@ -143,7 +143,7 @@ class WidgetController extends Controller
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', DB::raw('true'))
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -210,7 +210,7 @@ class WidgetController extends Controller
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', DB::raw('true'))
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -308,7 +308,7 @@ class WidgetController extends Controller
                     'client_name' => $request->input('guest_name'),
                     'client_email' => $request->input('guest_email'),
                     'client_phone' => $request->input('guest_phone'),
-                    'is_guest' => DB::raw('true'),
+                    'is_guest' => true,
                     'guest_address' => $request->input('guest_address'),
                     'notes' => $request->input('notes'),
                     'booking_source' => 'widget',
@@ -363,12 +363,20 @@ class WidgetController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            Log::error('Widget booking error: ' . $e->getMessage());
+            Log::error('Widget booking error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
 
-            $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
-                'error' => 'Booking failed',
-                'message' => $e->getMessage(),
-            ], $widgetSetting->id);
+            try {
+                $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
+                    'error' => 'Booking failed',
+                    'message' => $e->getMessage(),
+                ], $widgetSetting->id);
+            } catch (\Exception $analyticsError) {
+                Log::warning('Widget analytics log failed: ' . $analyticsError->getMessage());
+            }
 
             return response()->json([
                 'error' => 'Greška pri kreiranju rezervacije. Molimo pokušajte ponovo.'

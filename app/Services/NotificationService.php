@@ -18,8 +18,11 @@ class NotificationService
     /**
      * Format date for display in European format (DD.MM.YYYY)
      */
-    private function formatDate(string $date): string
+    private function formatDate($date): string
     {
+        if ($date instanceof Carbon) {
+            return $date->format('d.m.Y');
+        }
         return Carbon::parse($date)->format('d.m.Y');
     }
 
