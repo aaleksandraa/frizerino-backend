@@ -135,6 +135,14 @@ Route::prefix('v1')->group(function () {
     // XML Sitemap (no throttling)
     Route::get('/sitemap.xml', [PublicController::class, 'sitemapXml']);
 
+    // Public Widget Routes (for iframe embedding)
+    Route::prefix('widget')->group(function () {
+        Route::get('/{salonSlug}', [\App\Http\Controllers\Api\WidgetController::class, 'show'])
+            ->middleware('throttle:120,1');
+        Route::post('/{salonSlug}/book', [\App\Http\Controllers\Api\WidgetController::class, 'book'])
+            ->middleware('throttle:60,1');
+    });
+
     // Protected routes with standard rate limiting (120 per minute)
     Route::middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
         // Auth routes
