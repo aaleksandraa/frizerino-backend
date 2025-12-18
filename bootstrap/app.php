@@ -22,6 +22,7 @@ return Application::configure()
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'throttle.custom' => \App\Http\Middleware\ThrottleRequests::class,
             'throttle.redis' => \App\Http\Middleware\ThrottleRequestsWithRedis::class,
+            'widget.cors' => \App\Http\Middleware\WidgetCors::class,
         ]);
 
         // Dodaj Security Headers middleware za sve API rute

@@ -32,6 +32,7 @@ class Appointment extends Model
         'end_time',
         'status',
         'notes',
+        'booking_source',
         'total_price',
         'payment_status',
     ];

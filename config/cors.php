@@ -20,7 +20,8 @@ return [
     'allowed_methods' => ['*'],
 
     // IMPORTANT: When supports_credentials is true, cannot use '*'
-    // Must specify exact origins
+    // Must specify exact origins for authenticated routes
+    // Widget routes use pattern matching below
     'allowed_origins' => [
         'http://localhost:3000',
         'http://localhost:5173',
@@ -30,7 +31,10 @@ return [
         'https://www.frizerino.com',
     ],
 
-    'allowed_origins_patterns' => [],
+    // Allow any origin for widget API routes (they use API key auth, not cookies)
+    'allowed_origins_patterns' => [
+        '#^https?://.*$#', // Allow all origins for widget routes
+    ],
 
     'allowed_headers' => ['*'],
 

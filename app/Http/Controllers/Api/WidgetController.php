@@ -33,10 +33,6 @@ class WidgetController extends Controller
             ->first();
 
         if (!$widgetSetting) {
-            $this->logAnalytics(null, WidgetAnalytics::EVENT_ERROR, $request, [
-                'error' => 'Invalid API key',
-                'api_key' => substr($apiKey, 0, 10) . '...',
-            ]);
             return response()->json(['error' => 'Invalid or inactive API key'], 401);
         }
 
@@ -48,7 +44,7 @@ class WidgetController extends Controller
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Domain not allowed',
                 'domain' => $domain,
-            ]);
+            ], $widgetSetting->id);
             return response()->json(['error' => 'Domain not allowed'], 403);
         }
 
@@ -67,12 +63,12 @@ class WidgetController extends Controller
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Salon not found',
                 'slug' => $salonSlug,
-            ]);
+            ], $widgetSetting->id);
             return response()->json(['error' => 'Salon not found or inactive'], 404);
         }
 
         // Log view analytics
-        $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_VIEW, $request);
+        $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_VIEW, $request, [], $widgetSetting->id);
 
         // Update last used timestamp
         $widgetSetting->update(['last_used_at' => now()]);
@@ -124,7 +120,7 @@ class WidgetController extends Controller
      */
     public function availableSlots(Request $request): JsonResponse
     {
-        $apiKey = $request->query('key');
+        $apiKey = $request->input('key');
 
         // Validate API key
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
@@ -148,7 +144,7 @@ class WidgetController extends Controller
             'date' => ['required', 'regex:/^\d{2}\.\d{2}\.\d{4}$/'],
             'services' => 'required|array|min:1',
             'services.*.serviceId' => 'required|exists:services,id',
-            'services.*.duration' => 'required|integer|min:1',
+            'services.*.duration' => 'required|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -210,7 +206,7 @@ class WidgetController extends Controller
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Domain not allowed',
                 'domain' => $domain,
-            ]);
+            ], $widgetSetting->id);
             return response()->json(['error' => 'Domain not allowed'], 403);
         }
 
@@ -242,7 +238,7 @@ class WidgetController extends Controller
         if ($request->input('salon_id') != $widgetSetting->salon_id) {
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Invalid salon',
-            ]);
+            ], $widgetSetting->id);
             return response()->json(['error' => 'Invalid salon'], 403);
         }
 
@@ -301,11 +297,11 @@ class WidgetController extends Controller
 
             // Log booking analytics
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_BOOKING, $request, [
-                'appointment_ids' => array_column($appointments, 'id'),
+                'appointment_ids' => array_map(fn($a) => $a->id, $appointments),
                 'service_ids' => $serviceIds,
                 'staff_id' => $request->input('staff_id'),
                 'total_price' => $totalPrice,
-            ]);
+            ], $widgetSetting->id);
 
             // Increment booking counter
             $widgetSetting->increment('total_bookings', count($appointments));
@@ -330,7 +326,7 @@ class WidgetController extends Controller
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Booking failed',
                 'message' => $e->getMessage(),
-            ]);
+            ], $widgetSetting->id);
 
             return response()->json([
                 'error' => 'Greška pri kreiranju rezervacije. Molimo pokušajte ponovo.'
@@ -341,7 +337,7 @@ class WidgetController extends Controller
     /**
      * Log analytics event
      */
-    private function logAnalytics(?int $salonId, string $eventType, Request $request, array $metadata = []): void
+    private function logAnalytics(?int $salonId, string $eventType, Request $request, array $metadata = [], ?int $widgetSettingId = null): void
     {
         try {
             $referer = $request->headers->get('referer');
@@ -349,14 +345,16 @@ class WidgetController extends Controller
 
             WidgetAnalytics::create([
                 'salon_id' => $salonId,
+                'widget_setting_id' => $widgetSettingId,
                 'event_type' => $eventType,
                 'referrer_domain' => $domain,
                 'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
+                'user_agent' => substr($request->userAgent() ?? '', 0, 500),
                 'metadata' => $metadata,
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to log widget analytics: ' . $e->getMessage());
+            // Silently fail - don't break widget for analytics errors
+            Log::warning('Widget analytics log failed: ' . $e->getMessage());
         }
     }
 
