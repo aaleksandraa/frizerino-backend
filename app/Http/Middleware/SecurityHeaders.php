@@ -20,6 +20,13 @@ class SecurityHeaders
         // Check if this is a widget route - allow embedding
         $isWidgetRoute = $request->is('widget/*') || $request->is('api/v1/widget/*');
 
+        // Debug logging
+        \Log::info('SecurityHeaders Middleware', [
+            'path' => $request->path(),
+            'isWidgetRoute' => $isWidgetRoute,
+            'url' => $request->fullUrl(),
+        ]);
+
         // Content Security Policy
         if (!$isWidgetRoute) {
             $response->headers->set('Content-Security-Policy',
@@ -54,8 +61,10 @@ class SecurityHeaders
         // Prevent clickjacking - EXCEPT for widget routes
         if (!$isWidgetRoute) {
             $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        } else {
+            // For widget routes, EXPLICITLY REMOVE X-Frame-Options to allow embedding
+            $response->headers->remove('X-Frame-Options');
         }
-        // For widget routes, don't set X-Frame-Options to allow embedding
 
         // XSS Protection (legacy browsers)
         $response->headers->set('X-XSS-Protection', '1; mode=block');
