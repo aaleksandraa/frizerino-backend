@@ -17,25 +17,45 @@ class SecurityHeaders
     {
         $response = $next($request);
 
+        // Check if this is a widget route - allow embedding
+        $isWidgetRoute = $request->is('widget/*') || $request->is('api/v1/widget/*');
+
         // Content Security Policy
-        $response->headers->set('Content-Security-Policy',
-            "default-src 'self'; " .
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://www.googletagmanager.com; " .
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
-            "img-src 'self' data: https: blob:; " .
-            "font-src 'self' data: https://fonts.gstatic.com; " .
-            "connect-src 'self' https://maps.googleapis.com; " .
-            "frame-src 'self' https://www.google.com; " .
-            "object-src 'none'; " .
-            "base-uri 'self'; " .
-            "form-action 'self';"
-        );
+        if (!$isWidgetRoute) {
+            $response->headers->set('Content-Security-Policy',
+                "default-src 'self'; " .
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://www.googletagmanager.com; " .
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+                "img-src 'self' data: https: blob:; " .
+                "font-src 'self' data: https://fonts.gstatic.com; " .
+                "connect-src 'self' https://maps.googleapis.com; " .
+                "frame-src 'self' https://www.google.com; " .
+                "object-src 'none'; " .
+                "base-uri 'self'; " .
+                "form-action 'self';"
+            );
+        } else {
+            // More permissive CSP for widget embedding
+            $response->headers->set('Content-Security-Policy',
+                "default-src 'self'; " .
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " .
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+                "img-src 'self' data: https: blob:; " .
+                "font-src 'self' data: https://fonts.gstatic.com; " .
+                "connect-src 'self'; " .
+                "frame-ancestors *; " . // Allow embedding from any domain
+                "object-src 'none';"
+            );
+        }
 
         // Prevent MIME type sniffing
         $response->headers->set('X-Content-Type-Options', 'nosniff');
 
-        // Prevent clickjacking
-        $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        // Prevent clickjacking - EXCEPT for widget routes
+        if (!$isWidgetRoute) {
+            $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        }
+        // For widget routes, don't set X-Frame-Options to allow embedding
 
         // XSS Protection (legacy browsers)
         $response->headers->set('X-XSS-Protection', '1; mode=block');
