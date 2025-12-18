@@ -19,7 +19,18 @@ class PublicStaffController extends Controller
             ->whereRaw('is_public = true')
             ->whereRaw('is_active = true')
             ->with([
-                'salon',
+                'salon.salonBreaks' => function ($query) {
+                    $query->whereRaw('is_active = true');
+                },
+                'salon.salonVacations' => function ($query) {
+                    $query->whereRaw('is_active = true');
+                },
+                'breaks' => function ($query) {
+                    $query->whereRaw('is_active = true');
+                },
+                'vacations' => function ($query) {
+                    $query->whereRaw('is_active = true');
+                },
                 'services.images' => function ($query) {
                     $query->orderBy('order');
                 },

@@ -55,6 +55,9 @@ class StaffResource extends JsonResource
                     'city' => $this->salon->city,
                     'phone' => $this->salon->phone,
                     'image_url' => $this->salon->image_url,
+                    'working_hours' => $this->salon->working_hours,
+                    'salon_breaks' => $this->salon->relationLoaded('salonBreaks') ? $this->salon->salonBreaks : [],
+                    'salon_vacations' => $this->salon->relationLoaded('salonVacations') ? $this->salon->salonVacations : [],
                 ];
             }),
             'services' => $this->when($this->relationLoaded('services'), function () {

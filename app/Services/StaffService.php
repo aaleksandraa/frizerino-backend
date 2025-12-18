@@ -27,21 +27,29 @@ class StaffService
                     'role' => 'frizer',
                     'salon_id' => $salon->id,
                 ]);
-                
+
                 $userId = $user->id;
             }
 
             // Create staff profile
-            $staff = Staff::create([
+            // Note: Using raw SQL for boolean fields to handle PostgreSQL boolean type correctly
+            $staffId = DB::table('staff')->insertGetId([
                 'user_id' => $userId,
                 'salon_id' => $salon->id,
                 'name' => $data['name'],
                 'role' => $data['role'],
                 'bio' => $data['bio'] ?? null,
-                'working_hours' => $data['working_hours'],
-                'specialties' => $data['specialties'] ?? [],
-                'is_active' => true,
+                'working_hours' => json_encode($data['working_hours']),
+                'specialties' => json_encode($data['specialties'] ?? []),
+                'is_active' => DB::raw('true'),
+                'is_public' => DB::raw('true'),
+                'accepts_bookings' => DB::raw('true'),
+                'slug' => \Illuminate\Support\Str::slug($data['name']),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
+
+            $staff = Staff::find($staffId);
 
             // Assign services
             if (isset($data['service_ids']) && is_array($data['service_ids'])) {
@@ -58,21 +66,35 @@ class StaffService
     public function updateStaff(Staff $staff, array $data): Staff
     {
         return DB::transaction(function () use ($staff, $data) {
-            // Update user account if exists
-            if ($staff->user_id && isset($data['email'])) {
+            // Update user account if exists and any user-related fields are provided
+            if ($staff->user_id && (isset($data['email']) || isset($data['password']) || isset($data['phone']))) {
                 $user = User::find($staff->user_id);
                 if ($user) {
-                    $userData = [
-                        'name' => $data['name'] ?? $user->name,
-                        'email' => $data['email'] ?? $user->email,
-                        'phone' => $data['phone'] ?? $user->phone,
-                    ];
-                    
-                    if (isset($data['password'])) {
+                    $userData = [];
+
+                    // Update name if provided
+                    if (isset($data['name'])) {
+                        $userData['name'] = $data['name'];
+                    }
+
+                    // Update email if provided and not empty
+                    if (isset($data['email']) && !empty(trim($data['email']))) {
+                        $userData['email'] = $data['email'];
+                    }
+
+                    // Update phone if provided
+                    if (isset($data['phone'])) {
+                        $userData['phone'] = $data['phone'];
+                    }
+
+                    // Update password if provided and not empty
+                    if (isset($data['password']) && !empty(trim($data['password']))) {
                         $userData['password'] = Hash::make($data['password']);
                     }
-                    
-                    $user->update($userData);
+
+                    if (!empty($userData)) {
+                        $user->update($userData);
+                    }
                 }
             }
 
@@ -80,7 +102,7 @@ class StaffService
             $staffData = array_filter($data, function ($key) {
                 return !in_array($key, ['email', 'password', 'phone', 'service_ids']);
             }, ARRAY_FILTER_USE_KEY);
-            
+
             $staff->update($staffData);
 
             // Update services
@@ -104,11 +126,11 @@ class StaffService
         for ($date = $start; $date <= $end; $date = strtotime('+1 day', $date)) {
             $dateString = date('d.m.Y', $date);
             $dayOfWeek = strtolower(date('l', $date));
-            
+
             // Check working hours
             $workingHours = $staff->working_hours[$dayOfWeek] ?? null;
             $isWorking = $workingHours && $workingHours['is_working'];
-            
+
             // Check for vacations
             $isOnVacation = false;
             foreach ($staff->vacations as $vacation) {
@@ -117,7 +139,7 @@ class StaffService
                     break;
                 }
             }
-            
+
             // Check for salon vacations
             $salon = $staff->salon;
             $isSalonClosed = false;
@@ -127,7 +149,7 @@ class StaffService
                     break;
                 }
             }
-            
+
             $availability[$dateString] = [
                 'is_working' => $isWorking,
                 'is_on_vacation' => $isOnVacation,

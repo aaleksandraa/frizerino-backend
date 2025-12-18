@@ -211,6 +211,28 @@ class StaffController extends Controller
 
         $validated = $request->validate([
             'auto_confirm' => 'sometimes|boolean',
+            'bio' => 'sometimes|nullable|string|max:500',
+            'bio_long' => 'sometimes|nullable|string|max:2000',
+            'title' => 'sometimes|nullable|string|max:255',
+            'years_experience' => 'sometimes|nullable|integer|min:0|max:50',
+            'languages' => 'sometimes|nullable|array',
+            'languages.*' => 'string|max:100',
+            'specialties' => 'sometimes|nullable|array',
+            'specialties.*' => 'string|max:100',
+            'education' => 'sometimes|nullable|array',
+            'education.*.school' => 'required_with:education|string|max:255',
+            'education.*.degree' => 'required_with:education|string|max:255',
+            'education.*.year' => 'required_with:education|string|max:50',
+            'achievements' => 'sometimes|nullable|array',
+            'achievements.*.title' => 'required_with:achievements|string|max:255',
+            'achievements.*.description' => 'required_with:achievements|string|max:1000',
+            'achievements.*.year' => 'required_with:achievements|string|max:50',
+            'instagram' => 'sometimes|nullable|url|max:255',
+            'facebook' => 'sometimes|nullable|url|max:255',
+            'tiktok' => 'sometimes|nullable|url|max:255',
+            'accepts_bookings' => 'sometimes|boolean',
+            'booking_note' => 'sometimes|nullable|string|max:500',
+            'is_public' => 'sometimes|boolean',
         ]);
 
         $staff->update($validated);
