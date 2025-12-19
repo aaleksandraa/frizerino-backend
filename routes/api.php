@@ -173,12 +173,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/salons/{salon}/available-slots', [SalonController::class, 'availableSlots']);
         Route::post('/salons/{salon}/available-slots-multi', [SalonController::class, 'availableSlotsMulti']);
 
-        // Staff routes
+        // Staff routes - reorder must come BEFORE {staff} parameter routes
         Route::post('/salons/{salon}/staff', [StaffController::class, 'store']);
+        Route::post('/salons/{salon}/staff/reorder', [StaffController::class, 'reorder']);
         Route::get('/salons/{salon}/staff/{staff}', [StaffController::class, 'show']);
         Route::put('/salons/{salon}/staff/{staff}', [StaffController::class, 'update']);
         Route::delete('/salons/{salon}/staff/{staff}', [StaffController::class, 'destroy']);
-        Route::post('/salons/{salon}/staff/reorder', [StaffController::class, 'reorder']);
         Route::post('/salons/{salon}/staff/{staff}/avatar', [StaffController::class, 'uploadAvatar']);
         Route::get('/salons/{salon}/staff/{staff}/schedule', [StaffController::class, 'schedule']);
         Route::get('/salons/{salon}/staff/{staff}/appointments', [StaffController::class, 'appointments']);
@@ -186,12 +186,12 @@ Route::prefix('v1')->group(function () {
         // Staff self-update route
         Route::put('/staff/me/settings', [StaffController::class, 'updateOwnSettings']);
 
-        // Service routes
+        // Service routes - reorder must come BEFORE {service} parameter routes
         Route::post('/salons/{salon}/services', [ServiceController::class, 'store']);
+        Route::post('/salons/{salon}/services/reorder', [ServiceController::class, 'reorder']);
         Route::get('/salons/{salon}/services/{service}', [ServiceController::class, 'show']);
         Route::put('/salons/{salon}/services/{service}', [ServiceController::class, 'update']);
         Route::delete('/salons/{salon}/services/{service}', [ServiceController::class, 'destroy']);
-        Route::post('/salons/{salon}/services/reorder', [ServiceController::class, 'reorder']);
 
         // Service image routes
         Route::post('/services/{service}/images', [ServiceImageController::class, 'store']);
