@@ -45,6 +45,7 @@ class StaffResource extends JsonResource
             'accepts_bookings' => $this->accepts_bookings,
             'booking_note' => $this->booking_note,
             'auto_confirm' => $this->auto_confirm,
+            'display_order' => $this->display_order ?? 0,
             'salon_id' => $this->salon_id,
             'salon' => $this->when($this->relationLoaded('salon'), function () {
                 return [

@@ -62,7 +62,9 @@ class SalonResource extends JsonResource
                 return ServiceResource::collection($sortedServices);
             }),
             'staff' => $this->when($this->relationLoaded('staff'), function () {
-                return StaffResource::collection($this->staff);
+                // Sort staff by display_order
+                $sortedStaff = $this->staff->sortBy('display_order');
+                return StaffResource::collection($sortedStaff);
             }),
             'reviews' => $this->when($this->relationLoaded('reviews'), function () {
                 return ReviewResource::collection($this->reviews);

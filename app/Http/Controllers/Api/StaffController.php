@@ -193,6 +193,33 @@ class StaffController extends Controller
     }
 
     /**
+     * Reorder staff members.
+     */
+    public function reorder(Request $request, Salon $salon): JsonResponse
+    {
+        $this->authorize('update', $salon);
+
+        $request->validate([
+            'staff' => 'required|array',
+            'staff.*.id' => 'required|integer|exists:staff,id',
+            'staff.*.display_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->staff as $item) {
+            Staff::where('id', $item['id'])
+                ->where('salon_id', $salon->id)
+                ->update(['display_order' => $item['display_order']]);
+        }
+
+        // Invalidate cache
+        \App\Services\CacheService::invalidateSalon($salon->id, $salon->slug);
+
+        return response()->json([
+            'message' => 'Staff reordered successfully',
+        ]);
+    }
+
+    /**
      * Update the authenticated frizer's own settings.
      */
     public function updateOwnSettings(Request $request): JsonResponse

@@ -55,6 +55,7 @@ class Staff extends Model
         'accepts_bookings',
         'booking_note',
         'auto_confirm',
+        'display_order',
     ];
 
     /**

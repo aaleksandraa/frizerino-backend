@@ -178,6 +178,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/salons/{salon}/staff/{staff}', [StaffController::class, 'show']);
         Route::put('/salons/{salon}/staff/{staff}', [StaffController::class, 'update']);
         Route::delete('/salons/{salon}/staff/{staff}', [StaffController::class, 'destroy']);
+        Route::post('/salons/{salon}/staff/reorder', [StaffController::class, 'reorder']);
         Route::post('/salons/{salon}/staff/{staff}/avatar', [StaffController::class, 'uploadAvatar']);
         Route::get('/salons/{salon}/staff/{staff}/schedule', [StaffController::class, 'schedule']);
         Route::get('/salons/{salon}/staff/{staff}/appointments', [StaffController::class, 'appointments']);
