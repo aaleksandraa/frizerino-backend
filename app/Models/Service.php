@@ -25,6 +25,7 @@ class Service extends Model
         'price',
         'discount_price',
         'category',
+        'display_order',
         'salon_id',
         'is_active',
     ];

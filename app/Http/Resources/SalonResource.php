@@ -41,6 +41,7 @@ class SalonResource extends JsonResource
             'auto_confirm' => $this->auto_confirm,
             'booking_slot_interval' => $this->booking_slot_interval,
             'show_service_gallery' => $this->show_service_gallery,
+            'category_order' => $this->category_order,
             'status' => $this->status,
             'meta_title' => $this->meta_title,
             'meta_description' => $this->meta_description,
@@ -56,7 +57,9 @@ class SalonResource extends JsonResource
                 });
             }),
             'services' => $this->when($this->relationLoaded('services'), function () {
-                return ServiceResource::collection($this->services);
+                // Sort services by display_order
+                $sortedServices = $this->services->sortBy('display_order');
+                return ServiceResource::collection($sortedServices);
             }),
             'staff' => $this->when($this->relationLoaded('staff'), function () {
                 return StaffResource::collection($this->staff);

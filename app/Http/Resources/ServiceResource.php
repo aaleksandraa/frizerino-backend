@@ -22,6 +22,7 @@ class ServiceResource extends JsonResource
             'price' => $this->price,
             'discount_price' => $this->discount_price,
             'category' => $this->category,
+            'display_order' => $this->display_order ?? 0,
             'salon_id' => $this->salon_id,
             'is_active' => $this->is_active,
             'staff' => $this->when($this->relationLoaded('staff'), function () {

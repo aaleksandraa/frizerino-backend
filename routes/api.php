@@ -190,6 +190,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/salons/{salon}/services/{service}', [ServiceController::class, 'show']);
         Route::put('/salons/{salon}/services/{service}', [ServiceController::class, 'update']);
         Route::delete('/salons/{salon}/services/{service}', [ServiceController::class, 'destroy']);
+        Route::post('/salons/{salon}/services/reorder', [ServiceController::class, 'reorder']);
 
         // Service image routes
         Route::post('/services/{service}/images', [ServiceImageController::class, 'store']);

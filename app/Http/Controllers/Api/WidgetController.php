@@ -60,10 +60,10 @@ class WidgetController extends Controller
         }
 
         // PostgreSQL requires DB::raw('true') for boolean columns
-        // Sort services by category then by id (same order as main app)
+        // Sort services by display_order then by id (same order as main app)
         $salon = Salon::with(['services' => function($query) {
             $query->where('is_active', DB::raw('true'))
-                  ->orderBy('category')
+                  ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
             $query->where('is_active', DB::raw('true'))->orderBy('name');
@@ -95,6 +95,7 @@ class WidgetController extends Controller
                 'phone' => $salon->phone,
                 'email' => $salon->email,
                 'working_hours' => $salon->working_hours,
+                'category_order' => $salon->category_order,
                 'images' => $salon->images,
             ],
             'services' => $salon->services->map(function($service) {
@@ -106,6 +107,7 @@ class WidgetController extends Controller
                     'discount_price' => $service->discount_price,
                     'duration' => $service->duration,
                     'category' => $service->category,
+                    'display_order' => $service->display_order,
                     'staff_ids' => $service->staff_ids,
                 ];
             }),

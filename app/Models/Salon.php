@@ -49,6 +49,7 @@ class Salon extends Model
         'auto_confirm',
         'booking_slot_interval',
         'show_service_gallery',
+        'category_order',
     ];
 
     /**
@@ -59,6 +60,7 @@ class Salon extends Model
     protected $casts = [
         'working_hours' => 'json',
         'location' => 'json',
+        'category_order' => 'json',
         'show_service_gallery' => 'boolean',
         'target_audience' => 'json',
         'amenities' => 'json',

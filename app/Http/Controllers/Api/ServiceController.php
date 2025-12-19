@@ -135,4 +135,38 @@ class ServiceController extends Controller
             'services_by_category' => $servicesByCategory,
         ]);
     }
+
+    /**
+     * Reorder services and categories.
+     */
+    public function reorder(\Illuminate\Http\Request $request, Salon $salon): JsonResponse
+    {
+        $this->authorize('update', $salon);
+
+        $request->validate([
+            'services' => 'required|array',
+            'services.*.id' => 'required|integer|exists:services,id',
+            'services.*.display_order' => 'required|integer|min:0',
+            'category_order' => 'nullable|array',
+        ]);
+
+        // Update service display orders
+        foreach ($request->services as $item) {
+            Service::where('id', $item['id'])
+                ->where('salon_id', $salon->id)
+                ->update(['display_order' => $item['display_order']]);
+        }
+
+        // Update category order if provided
+        if ($request->has('category_order')) {
+            $salon->update(['category_order' => $request->category_order]);
+        }
+
+        // Invalidate cache
+        \App\Services\CacheService::invalidateSalon($salon->id, $salon->slug);
+
+        return response()->json([
+            'message' => 'Services reordered successfully',
+        ]);
+    }
 }
