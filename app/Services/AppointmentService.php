@@ -115,8 +115,11 @@ class AppointmentService
         }
 
         // Check for existing appointments
+        // CRITICAL: Use Carbon to ensure proper date comparison
+        $carbonDate = Carbon::parse($isoDate);
+
         $query = Appointment::where('staff_id', $staff->id)
-            ->whereDate('date', $isoDate)
+            ->whereDate('date', $carbonDate->format('Y-m-d'))
             ->whereIn('status', ['confirmed', 'in_progress', 'pending']);
 
         // Exclude the current appointment if updating
@@ -125,6 +128,21 @@ class AppointmentService
         }
 
         $existingAppointments = $query->get();
+
+        // Log when appointments are found for debugging
+        if ($existingAppointments->count() > 0) {
+            \Log::info('AppointmentService: Found existing appointments', [
+                'staff_id' => $staff->id,
+                'date' => $isoDate,
+                'time' => $time,
+                'appointments' => $existingAppointments->map(fn($a) => [
+                    'id' => $a->id,
+                    'time' => $a->time,
+                    'end_time' => $a->end_time,
+                    'status' => $a->status
+                ])->toArray()
+            ]);
+        }
 
         foreach ($existingAppointments as $appointment) {
             $existingStart = strtotime($appointment->time);

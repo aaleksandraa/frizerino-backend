@@ -197,6 +197,73 @@ class WidgetController extends Controller
     }
 
     /**
+     * Debug endpoint to check appointments for a staff member on a specific date
+     * This helps diagnose why slots might appear available when they shouldn't be
+     */
+    public function debugAppointments(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'staff_id' => 'required|integer|exists:staff,id',
+            'date' => ['required', 'regex:/^\d{2}\.\d{2}\.\d{4}$/'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 422);
+        }
+
+        $staffId = $request->input('staff_id');
+        $dateInput = $request->input('date');
+
+        // Convert date format
+        $isoDate = Carbon::createFromFormat('d.m.Y', $dateInput)->format('Y-m-d');
+
+        // Get all appointments for this staff on this date (any status)
+        $allAppointments = Appointment::where('staff_id', $staffId)
+            ->whereDate('date', $isoDate)
+            ->get();
+
+        // Get blocking appointments (pending, confirmed, in_progress)
+        $blockingAppointments = Appointment::where('staff_id', $staffId)
+            ->whereDate('date', $isoDate)
+            ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+            ->get();
+
+        // Also try with direct date comparison for debugging
+        $directCompareAppointments = Appointment::where('staff_id', $staffId)
+            ->where('date', $isoDate)
+            ->get();
+
+        return response()->json([
+            'debug_info' => [
+                'staff_id' => $staffId,
+                'date_input' => $dateInput,
+                'iso_date' => $isoDate,
+                'query_methods' => [
+                    'whereDate_all' => $allAppointments->count(),
+                    'whereDate_blocking' => $blockingAppointments->count(),
+                    'direct_compare' => $directCompareAppointments->count(),
+                ],
+            ],
+            'all_appointments' => $allAppointments->map(fn($a) => [
+                'id' => $a->id,
+                'date_raw' => $a->getRawOriginal('date'),
+                'date_formatted' => $a->date ? $a->date->format('Y-m-d') : null,
+                'time' => $a->time,
+                'end_time' => $a->end_time,
+                'status' => $a->status,
+                'client_name' => $a->client_name,
+                'service_id' => $a->service_id,
+            ])->toArray(),
+            'blocking_appointments' => $blockingAppointments->map(fn($a) => [
+                'id' => $a->id,
+                'time' => $a->time,
+                'end_time' => $a->end_time,
+                'status' => $a->status,
+            ])->toArray(),
+        ]);
+    }
+
+    /**
      * Book appointment(s) via widget
      */
     public function book(Request $request): JsonResponse
@@ -279,8 +346,9 @@ class WidgetController extends Controller
             $totalEndTime = sprintf('%02d:%02d', floor($totalEndMinutes / 60), $totalEndMinutes % 60);
 
             // CRITICAL: Check for overlapping appointments BEFORE creating
+            // Use whereDate for consistent date comparison
             $overlappingAppointment = Appointment::where('staff_id', $request->input('staff_id'))
-                ->where('date', $dateForDb)
+                ->whereDate('date', $dateForDb)
                 ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
                 ->where(function($query) use ($startTime, $totalEndTime) {
                     // Check if new appointment overlaps with any existing appointment

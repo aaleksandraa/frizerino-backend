@@ -63,6 +63,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('throttle.redis:60,1')->group(function () {
             Route::get('/{salonSlug}', [\App\Http\Controllers\Api\WidgetController::class, 'show']);
             Route::post('/slots/available', [\App\Http\Controllers\Api\WidgetController::class, 'availableSlots']);
+            Route::post('/debug/appointments', [\App\Http\Controllers\Api\WidgetController::class, 'debugAppointments']);
             Route::post('/book', [\App\Http\Controllers\Api\WidgetController::class, 'book']);
         });
     });

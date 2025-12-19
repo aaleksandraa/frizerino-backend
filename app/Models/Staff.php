@@ -285,10 +285,35 @@ class Staff extends Model
         }
 
         // Check for existing appointments (including pending - they also block slots)
+        // CRITICAL FIX: Use Carbon to parse the date and compare properly
+        // The date field is cast as 'date' in Appointment model, so it's a Carbon instance
+        $carbonDate = \Carbon\Carbon::parse($isoDate);
+
         $existingAppointments = $this->appointments()
-            ->where('date', $isoDate)
+            ->whereDate('date', $carbonDate->format('Y-m-d'))
             ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
             ->get();
+
+        // Only log when appointments are found to avoid spam
+        if ($existingAppointments->count() > 0) {
+            \Log::info('Staff availability check - appointments found', [
+                'staff_id' => $this->id,
+                'date_input' => $date,
+                'iso_date' => $isoDate,
+                'carbon_date' => $carbonDate->format('Y-m-d'),
+                'time_checking' => $time,
+                'duration' => $duration,
+                'appointments_found' => $existingAppointments->count(),
+                'appointments' => $existingAppointments->map(fn($a) => [
+                    'id' => $a->id,
+                    'date_raw' => $a->getRawOriginal('date'),
+                    'date_formatted' => $a->date ? $a->date->format('Y-m-d') : null,
+                    'time' => $a->time,
+                    'end_time' => $a->end_time,
+                    'status' => $a->status
+                ])->toArray()
+            ]);
+        }
 
         foreach ($existingAppointments as $appointment) {
             $existingStart = strtotime($appointment->time);
@@ -296,6 +321,15 @@ class Staff extends Model
 
             // Check if appointment overlaps with existing appointment
             if (($appointmentTime < $existingEnd) && ($appointmentEndTime > $existingStart)) {
+                \Log::info('Slot blocked by existing appointment', [
+                    'staff_id' => $this->id,
+                    'date' => $isoDate,
+                    'requested_time' => $time,
+                    'requested_end' => date('H:i', $appointmentEndTime),
+                    'blocking_appointment_id' => $appointment->id,
+                    'blocking_time' => $appointment->time,
+                    'blocking_end' => $appointment->end_time
+                ]);
                 return false;
             }
         }
