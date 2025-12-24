@@ -29,6 +29,53 @@ class WidgetController extends Controller
     }
 
     /**
+     * Find or create a guest user by email.
+     * If user with email exists, return that user.
+     * Otherwise, create a new guest user that can later claim their appointments when they register.
+     */
+    private function findOrCreateGuestUser(array $data): ?\App\Models\User
+    {
+        // If no email provided, return null
+        if (empty($data['email'])) {
+            return null;
+        }
+
+        // Try to find existing user by email
+        $user = \App\Models\User::where('email', $data['email'])->first();
+
+        if ($user) {
+            // User exists - update info if provided data is more complete
+            $updates = [];
+
+            if (!empty($data['name']) && strlen($data['name']) > strlen($user->name)) {
+                $updates['name'] = $data['name'];
+            }
+
+            if (!empty($data['phone']) && $user->phone !== $data['phone']) {
+                $updates['phone'] = $data['phone'];
+            }
+
+            if (!empty($updates)) {
+                $user->update($updates);
+            }
+
+            return $user;
+        }
+
+        // Create new guest user
+        return \App\Models\User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
+            'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
+            'email_verified_at' => null,
+            'role' => 'klijent',
+            'is_guest' => DB::raw('true'),
+            'created_via' => 'widget',
+        ]);
+    }
+
+    /**
      * Get widget data (salon, services, staff)
      */
     public function show(Request $request, string $salonSlug): JsonResponse
@@ -297,7 +344,7 @@ class WidgetController extends Controller
             'guest_name' => 'required|string|max:255|min:3',
             'guest_email' => 'nullable|email|max:255',
             'guest_phone' => 'required|string|min:8|max:20',
-            'guest_address' => 'required|string|max:255|min:5',
+            'guest_address' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:1000',
             'service_id' => 'required_without:services|integer|exists:services,id',
             'services' => 'required_without:service_id|array|min:1',
@@ -370,6 +417,16 @@ class WidgetController extends Controller
             $totalPrice = 0;
             $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
 
+            // Find or create guest user if email provided
+            $guestUser = null;
+            if (!empty($request->input('guest_email'))) {
+                $guestUser = $this->findOrCreateGuestUser([
+                    'name' => $request->input('guest_name'),
+                    'email' => $request->input('guest_email'),
+                    'phone' => $request->input('guest_phone'),
+                ]);
+            }
+
             foreach ($serviceIds as $serviceId) {
                 $service = Service::findOrFail($serviceId);
 
@@ -379,7 +436,7 @@ class WidgetController extends Controller
                 $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
 
                 $appointment = Appointment::create([
-                    'client_id' => null,
+                    'client_id' => $guestUser?->id, // Link to guest user if email provided
                     'salon_id' => $request->input('salon_id'),
                     'service_id' => $serviceId,
                     'staff_id' => $request->input('staff_id'),

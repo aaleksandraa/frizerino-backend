@@ -44,7 +44,15 @@ class ReviewRequestMail extends Mailable implements ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $salon = $this->appointment->salon;
+
+        // Use salon's email for Reply-To if available
+        $replyToEmail = $salon->email ?: 'info@frizerino.com';
+        $replyToName = $salon->email ? $salon->name : 'Frizerino Podrška';
+
         return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address('info@frizerino.com', $salon->name),
+            replyTo: [new \Illuminate\Mail\Mailables\Address($replyToEmail, $replyToName)],
             subject: "Ocijenite Vaše iskustvo u salonu {$this->salonName}",
         );
     }

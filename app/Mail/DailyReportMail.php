@@ -3,25 +3,31 @@
 namespace App\Mail;
 
 use App\Models\Salon;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class SalonApprovedMail extends Mailable implements ShouldQueue
+class DailyReportMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     public Salon $salon;
+    public array $reportData;
+    public Carbon $date;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(Salon $salon)
+    public function __construct(Salon $salon, array $reportData, Carbon $date)
     {
         $this->salon = $salon;
+        $this->reportData = $reportData;
+        $this->date = $date;
     }
 
     /**
@@ -30,9 +36,8 @@ class SalonApprovedMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            from: new \Illuminate\Mail\Mailables\Address('info@frizerino.com', 'Frizerino'),
-            replyTo: [new \Illuminate\Mail\Mailables\Address('info@frizerino.com', 'Frizerino Podrška')],
-            subject: 'Vaš salon je odobren! 🎉 - Frizerino',
+            from: new Address('info@frizerino.com', 'Frizerino'),
+            subject: "Dnevni izvještaj - {$this->date->format('d.m.Y')} - {$this->salon->name}",
         );
     }
 
@@ -42,19 +47,17 @@ class SalonApprovedMail extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'emails.salon-approved',
+            view: 'emails.daily-report',
             with: [
                 'salon' => $this->salon,
-                'ownerName' => $this->salon->owner?->name ?? 'Vlasnik',
-                'dashboardUrl' => config('app.frontend_url', 'https://frizerino.com') . '/dashboard',
+                'report' => $this->reportData,
+                'date' => $this->date,
             ],
         );
     }
 
     /**
      * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
      */
     public function attachments(): array
     {

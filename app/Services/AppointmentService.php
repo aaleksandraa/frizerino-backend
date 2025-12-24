@@ -129,20 +129,23 @@ class AppointmentService
 
         $existingAppointments = $query->get();
 
-        // Log when appointments are found for debugging
-        if ($existingAppointments->count() > 0) {
-            \Log::info('AppointmentService: Found existing appointments', [
-                'staff_id' => $staff->id,
-                'date' => $isoDate,
-                'time' => $time,
-                'appointments' => $existingAppointments->map(fn($a) => [
-                    'id' => $a->id,
-                    'time' => $a->time,
-                    'end_time' => $a->end_time,
-                    'status' => $a->status
-                ])->toArray()
-            ]);
-        }
+        // Log when checking availability
+        \Log::info('AppointmentService: Checking availability', [
+            'staff_id' => $staff->id,
+            'date' => $isoDate,
+            'carbon_date' => $carbonDate->format('Y-m-d'),
+            'time' => $time,
+            'duration' => $duration,
+            'existing_count' => $existingAppointments->count(),
+            'appointments' => $existingAppointments->map(fn($a) => [
+                'id' => $a->id,
+                'date' => $a->date,
+                'time' => $a->time,
+                'end_time' => $a->end_time,
+                'status' => $a->status,
+                'source' => $a->source ?? 'manual'
+            ])->toArray()
+        ]);
 
         foreach ($existingAppointments as $appointment) {
             $existingStart = strtotime($appointment->time);
@@ -150,6 +153,14 @@ class AppointmentService
 
             // Check if appointment overlaps with existing appointment
             if (($appointmentTime < $existingEnd) && ($appointmentEndTime > $existingStart)) {
+                \Log::warning('AppointmentService: Time slot occupied', [
+                    'requested_time' => $time,
+                    'requested_end' => date('H:i', $appointmentEndTime),
+                    'existing_time' => $appointment->time,
+                    'existing_end' => $appointment->end_time,
+                    'existing_id' => $appointment->id,
+                    'existing_source' => $appointment->source ?? 'manual'
+                ]);
                 return false;
             }
         }

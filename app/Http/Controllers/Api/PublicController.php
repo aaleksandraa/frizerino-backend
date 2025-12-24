@@ -37,6 +37,53 @@ class PublicController extends Controller
     }
 
     /**
+     * Find or create a guest user by email.
+     * If user with email exists, return that user.
+     * Otherwise, create a new guest user that can later claim their appointments when they register.
+     */
+    private function findOrCreateGuestUser(array $data): ?\App\Models\User
+    {
+        // If no email provided, return null
+        if (empty($data['email'])) {
+            return null;
+        }
+
+        // Try to find existing user by email
+        $user = \App\Models\User::where('email', $data['email'])->first();
+
+        if ($user) {
+            // User exists - update info if provided data is more complete
+            $updates = [];
+
+            if (!empty($data['name']) && strlen($data['name']) > strlen($user->name)) {
+                $updates['name'] = $data['name'];
+            }
+
+            if (!empty($data['phone']) && $user->phone !== $data['phone']) {
+                $updates['phone'] = $data['phone'];
+            }
+
+            if (!empty($updates)) {
+                $user->update($updates);
+            }
+
+            return $user;
+        }
+
+        // Create new guest user
+        return \App\Models\User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
+            'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
+            'email_verified_at' => null,
+            'role' => 'klijent',
+            'is_guest' => DB::raw('true'),
+            'created_via' => 'booking',
+        ]);
+    }
+
+    /**
      * Get list of all cities with salon counts for SEO pages
      */
     public function cities(): JsonResponse
@@ -293,17 +340,27 @@ class PublicController extends Controller
         // Create cache key from request parameters
         $cacheKey = 'search:' . md5(json_encode($request->all()));
 
-        // Cache for 5 minutes (300 seconds)
+        // Cache for 10 minutes for category searches (no date/time), 2 minutes for others
         // Skip cache if date/time filters are present (real-time availability)
         $useCache = !$request->filled('date') && !$request->filled('time');
+        $cacheDuration = $request->filled('service') && !$request->filled('date') ? 600 : 120; // 10min for categories, 2min for others
 
         if ($useCache && \Illuminate\Support\Facades\Cache::has($cacheKey)) {
             return response()->json(\Illuminate\Support\Facades\Cache::get($cacheKey));
         }
 
         $query = Salon::approved()
-            ->with(['images', 'services', 'owner:id,name,email']) // Eager load owner to prevent N+1
-            ->withCount(['reviews', 'staff']);
+            ->with([
+                'images' => function ($q) {
+                    $q->orderBy('is_primary', 'desc')->limit(3); // Only load first 3 images
+                },
+                'services' => function ($q) {
+                    $q->select('id', 'salon_id', 'name', 'category', 'price', 'duration'); // Only needed fields
+                },
+                'owner:id,name,email'
+            ])
+            ->withCount(['reviews', 'staff'])
+            ->select('id', 'name', 'slug', 'city', 'city_slug', 'address', 'phone', 'description', 'latitude', 'longitude', 'average_rating', 'is_approved'); // Only needed fields
 
         // Filter by date and time availability
         if ($request->filled('date') || $request->filled('time')) {
@@ -372,9 +429,32 @@ class PublicController extends Controller
 
         // Filter by service type
         if ($request->filled('service')) {
-            $query->whereHas('services', function ($q) use ($request) {
-                $q->where('name', 'ilike', "%{$request->service}%")
-                    ->orWhere('category', 'ilike', "%{$request->service}%");
+            $serviceSearch = $request->service;
+
+            // Map frontend category names to service keywords
+            $categoryKeywords = [
+                'Frizeri' => ['šišanje', 'farbanje', 'pramenovi', 'feniranje', 'styling', 'kosa', 'frizer'],
+                'Kozmetičari' => ['tretman lica', 'čišćenje lica', 'anti-age', 'kozmetika', 'njega lica', 'piling'],
+                'Manikir' => ['manikir', 'gel lak', 'nadogradnja noktiju', 'nail art', 'nokti', 'gel'],
+                'Pedikir' => ['pedikir', 'medicinski pedikir', 'njega stopala', 'stopala'],
+                'Berber' => ['muško šišanje', 'brada', 'brijanje', 'fade', 'berber', 'muški'],
+                'Depilacija' => ['depilacija', 'vosak', 'laser', 'šećerna pasta', 'epilacija'],
+                'Masaža' => ['masaža', 'relax', 'sportska masaža', 'anticelulitna', 'terapeutska'],
+                'Trepavice' => ['trepavice', 'nadogradnja trepavica', 'lash lift', 'laminacija trepavica', 'lashes'],
+                'Obrve' => ['obrve', 'microblading', 'laminacija obrva', 'oblikovanje obrva', 'brows'],
+            ];
+
+            // Get keywords for the category if it matches
+            $keywords = $categoryKeywords[$serviceSearch] ?? [$serviceSearch];
+
+            $query->whereHas('services', function ($q) use ($keywords) {
+                $q->where(function ($sq) use ($keywords) {
+                    foreach ($keywords as $keyword) {
+                        $sq->orWhere('name', 'ilike', "%{$keyword}%")
+                           ->orWhere('category', 'ilike', "%{$keyword}%")
+                           ->orWhere('description', 'ilike', "%{$keyword}%");
+                    }
+                });
             });
         }
 
@@ -435,7 +515,7 @@ class PublicController extends Controller
 
         // Cache the response if applicable
         if ($useCache) {
-            \Illuminate\Support\Facades\Cache::put($cacheKey, $responseData, 300);
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $responseData, $cacheDuration);
         }
 
         return response()->json($responseData);
@@ -457,7 +537,7 @@ class PublicController extends Controller
             'guest_name' => 'required|string|max:255',
             'guest_email' => 'nullable|email|max:255',
             'guest_phone' => 'required|string|max:20',
-            'guest_address' => 'required|string|max:500',
+            'guest_address' => 'nullable|string|max:500',
             // Optional: create account
             'create_account' => 'boolean',
             'password' => 'required_if:create_account,true|min:8|nullable',
@@ -465,7 +545,6 @@ class PublicController extends Controller
             'date.regex' => 'Datum mora biti u formatu DD.MM.YYYY',
             'guest_name.required' => 'Ime i prezime su obavezni',
             'guest_phone.required' => 'Broj telefona je obavezan',
-            'guest_address.required' => 'Adresa je obavezna',
         ]);
 
         if ($validator->fails()) {
@@ -512,8 +591,18 @@ class PublicController extends Controller
                 // Convert European date format to ISO format for database
                 $dateForDb = Carbon::createFromFormat('d.m.Y', $request->date)->format('Y-m-d');
 
+                // Find or create guest user if email provided
+                $guestUser = null;
+                if (!empty($request->guest_email)) {
+                    $guestUser = $this->findOrCreateGuestUser([
+                        'name' => $request->guest_name,
+                        'email' => $request->guest_email,
+                        'phone' => $request->guest_phone,
+                    ]);
+                }
+
                 $appointment = Appointment::create([
-                    'client_id' => null, // Guest appointment has no user
+                    'client_id' => $guestUser?->id, // Link to guest user if email provided
                     'client_name' => $request->guest_name,
                     'client_email' => $request->guest_email,
                     'client_phone' => $request->guest_phone,
@@ -861,5 +950,49 @@ class PublicController extends Controller
         }
 
         return $hours;
+    }
+
+    /**
+     * Get SEO meta tags for a specific page
+     */
+    public function getSeoMeta(Request $request): JsonResponse
+    {
+        $type = $request->input('type'); // 'salon', 'city', 'homepage', 'category'
+        $slug = $request->input('slug');
+        $city = $request->input('city');
+        $category = $request->input('category');
+
+        $seoService = new \App\Services\SeoService();
+
+        try {
+            switch ($type) {
+                case 'salon':
+                    $salon = Salon::where('slug', $slug)
+                        ->with(['services', 'reviews'])
+                        ->firstOrFail();
+                    $meta = $seoService->generateSalonMeta($salon);
+                    break;
+
+                case 'city':
+                    $meta = $seoService->generateCityMeta($city, $category);
+                    break;
+
+                case 'homepage':
+                    $meta = $seoService->generateHomepageMeta();
+                    break;
+
+                default:
+                    return response()->json([
+                        'error' => 'Invalid type'
+                    ], 400);
+            }
+
+            return response()->json($meta);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to generate SEO meta',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

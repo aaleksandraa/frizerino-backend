@@ -45,11 +45,31 @@ class AppointmentCancelledMail extends Mailable implements ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $salon = $this->appointment->salon;
+
         $subject = $this->recipientType === 'client'
-            ? 'Termin otkazan - ' . $this->appointment->salon->name
+            ? 'Termin otkazan - ' . $salon->name
             : 'Otkazan termin - ' . ($this->appointment->client_name ?? 'Klijent');
 
-        return new Envelope(subject: $subject);
+        // Use salon's email for Reply-To if available
+        $replyToEmail = $salon->email ?: 'info@frizerino.com';
+        $replyToName = $salon->email ? $salon->name : 'Frizerino Podrška';
+
+        // For client emails, use salon branding
+        if ($this->recipientType === 'client') {
+            return new Envelope(
+                from: new \Illuminate\Mail\Mailables\Address('info@frizerino.com', $salon->name),
+                replyTo: [new \Illuminate\Mail\Mailables\Address($replyToEmail, $replyToName)],
+                subject: $subject,
+            );
+        }
+
+        // For salon emails, use Frizerino branding
+        return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address('info@frizerino.com', 'Frizerino'),
+            replyTo: [new \Illuminate\Mail\Mailables\Address('info@frizerino.com', 'Frizerino Podrška')],
+            subject: $subject,
+        );
     }
 
     /**

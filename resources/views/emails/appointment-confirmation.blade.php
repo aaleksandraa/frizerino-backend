@@ -133,6 +133,50 @@
                                 </tr>
                             </table>
 
+                            <!-- Contact Info -->
+                            <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f0fdf4; border-radius: 8px; border: 1px solid #86efac; margin-bottom: 24px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="color: #166534; font-size: 15px; font-weight: 600; margin: 0 0 12px; text-align: center;">
+                                            💬 Imate pitanje?
+                                        </p>
+                                        <p style="color: #15803d; font-size: 14px; margin: 0 0 16px; text-align: center; line-height: 1.5;">
+                                            Odgovorite direktno na ovaj email ili kontaktirajte salon:
+                                        </p>
+                                        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%;">
+                                            @if($appointment->salon->phone)
+                                            <tr>
+                                                <td style="text-align: center; padding: 4px 0;">
+                                                    <span style="color: #166534; font-size: 14px;">📞 </span>
+                                                    <a href="tel:{{ $appointment->salon->phone }}" style="color: #166534; text-decoration: none; font-weight: 500; font-size: 14px;">
+                                                        {{ $appointment->salon->phone }}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            @endif
+                                            @if($appointment->salon->email)
+                                            <tr>
+                                                <td style="text-align: center; padding: 4px 0;">
+                                                    <span style="color: #166534; font-size: 14px;">✉️ </span>
+                                                    <a href="mailto:{{ $appointment->salon->email }}" style="color: #166534; text-decoration: none; font-weight: 500; font-size: 14px;">
+                                                        {{ $appointment->salon->email }}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            @endif
+                                            <tr>
+                                                <td style="text-align: center; padding: 4px 0;">
+                                                    <span style="color: #166534; font-size: 14px;">📍 </span>
+                                                    <span style="color: #166534; font-size: 14px;">
+                                                        {{ $appointment->salon->address }}, {{ $appointment->salon->city }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
                             <!-- CTA Button -->
                             <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin-bottom: 24px;">
                                 <tr>
@@ -143,13 +187,6 @@
                                     </td>
                                 </tr>
                             </table>
-
-                            <!-- Contact Info -->
-                            @if($appointment->salon->phone)
-                            <p style="color: #6b7280; font-size: 14px; margin: 0; text-align: center;">
-                                Kontakt salona: <a href="tel:{{ $appointment->salon->phone }}" style="color: #374151; text-decoration: none; font-weight: 500;">{{ $appointment->salon->phone }}</a>
-                            </p>
-                            @endif
                         </td>
                     </tr>
 

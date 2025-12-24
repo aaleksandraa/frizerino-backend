@@ -23,10 +23,14 @@ return Application::configure()
             'throttle.custom' => \App\Http\Middleware\ThrottleRequests::class,
             'throttle.redis' => \App\Http\Middleware\ThrottleRequestsWithRedis::class,
             'widget.cors' => \App\Http\Middleware\WidgetCors::class,
+            'bot.protection' => \App\Http\Middleware\BotProtection::class,
         ]);
 
         // Dodaj Security Headers middleware za sve API rute
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
+        // Dodaj Bot Protection middleware za sve public rute
+        $middleware->append(\App\Http\Middleware\BotProtection::class);
 
         // Dodaj Sentry context middleware
         $middleware->append(\App\Http\Middleware\SentryContext::class);

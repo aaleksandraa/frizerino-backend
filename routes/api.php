@@ -1,16 +1,21 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\Admin\ImportController;
+use App\Http\Controllers\Api\Admin\HomepageCategoryController as AdminHomepageCategoryController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FavoriteController;
+use App\Http\Controllers\Api\HomepageCategoryController;
 use App\Http\Controllers\Api\JobAdController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublicController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\SalonController;
+use App\Http\Controllers\Api\SalonSettingsController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ServiceImageController;
@@ -135,6 +140,12 @@ Route::prefix('v1')->group(function () {
             // Job ads (public)
             Route::get('/job-ads', [JobAdController::class, 'index']);
             Route::get('/job-ads/{id}', [JobAdController::class, 'show']);
+
+            // Homepage categories (public)
+            Route::get('/homepage-categories', [HomepageCategoryController::class, 'index']);
+
+            // SEO meta tags (public)
+            Route::get('/seo-meta', [PublicController::class, 'getSeoMeta']);
         });
     });
 
@@ -157,6 +168,23 @@ Route::prefix('v1')->group(function () {
         Route::delete('/user/favorites/{salon}', [FavoriteController::class, 'destroy']);
         Route::get('/user/favorites/{salon}/check', [FavoriteController::class, 'check']);
         Route::get('/user/appointments', [AppointmentController::class, 'index']);
+
+        // Dashboard routes (optimized with caching)
+        Route::prefix('dashboard')->group(function () {
+            Route::get('/salon/stats', [DashboardController::class, 'salonStats']);
+            Route::get('/salon/today', [DashboardController::class, 'todayAppointments']);
+            Route::get('/salon/analytics', [DashboardController::class, 'salonAnalytics']);
+            Route::get('/staff/stats', [DashboardController::class, 'staffStats']);
+            Route::post('/clear-cache', [DashboardController::class, 'clearCache']);
+        });
+
+        // Salon settings routes (daily reports, etc.)
+        Route::prefix('salon/settings')->group(function () {
+            Route::get('/', [SalonSettingsController::class, 'show']);
+            Route::put('/', [SalonSettingsController::class, 'update']);
+            Route::post('/test-report', [SalonSettingsController::class, 'sendTestReport']);
+            Route::get('/preview-report', [SalonSettingsController::class, 'previewReport']);
+        });
         Route::post('/user/appointments', [AppointmentController::class, 'store']);
         Route::get('/user/appointments/{appointment}', [AppointmentController::class, 'show']);
         Route::put('/user/appointments/{appointment}', [AppointmentController::class, 'update']);
@@ -336,6 +364,29 @@ Route::prefix('v1')->group(function () {
             Route::put('/job-ads/{id}', [JobAdController::class, 'update']);
             Route::delete('/job-ads/{id}', [JobAdController::class, 'destroy']);
             Route::put('/job-ads/{id}/toggle-active', [JobAdController::class, 'toggleActive']);
+
+            // Homepage categories management
+            Route::prefix('homepage-categories')->group(function () {
+                Route::get('/', [AdminHomepageCategoryController::class, 'index']);
+                Route::post('/', [AdminHomepageCategoryController::class, 'store']);
+                Route::put('/{id}', [AdminHomepageCategoryController::class, 'update']);
+                Route::delete('/{id}', [AdminHomepageCategoryController::class, 'destroy']);
+                Route::post('/{id}/image', [AdminHomepageCategoryController::class, 'uploadImage']);
+                Route::post('/reorder', [AdminHomepageCategoryController::class, 'reorder']);
+                Route::put('/settings', [AdminHomepageCategoryController::class, 'updateSettings']);
+            });
+
+            // Import appointments
+            Route::prefix('import')->group(function () {
+                Route::post('/upload', [ImportController::class, 'upload']);
+                Route::get('/{importId}/preview', [ImportController::class, 'preview']);
+                Route::post('/{importId}/validate', [ImportController::class, 'validate']);
+                Route::post('/{importId}/process', [ImportController::class, 'process']);
+                Route::get('/batch/{importBatchId}/status', [ImportController::class, 'status']);
+                Route::get('/history', [ImportController::class, 'history']);
+                Route::get('/batch/{importBatchId}/errors', [ImportController::class, 'downloadErrors']);
+                Route::get('/template/{format}', [ImportController::class, 'downloadTemplate']);
+            });
         });
     });
 });
@@ -497,5 +548,17 @@ Route::middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
         Route::get('/locations/{location}', [LocationController::class, 'show']);
         Route::put('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
+
+        // Bot Protection
+        Route::prefix('bot-protection')->group(function () {
+            Route::get('/blocked-ips', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'getBlockedIps']);
+            Route::get('/stats', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'getBotStats']);
+            Route::get('/recent-requests', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'getRecentRequests']);
+            Route::post('/block-ip', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'blockIp']);
+            Route::post('/unblock-ip', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'unblockIp']);
+            Route::delete('/clear-old-logs', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'clearOldLogs']);
+            Route::get('/settings', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'getSettings']);
+            Route::put('/settings', [\App\Http\Controllers\Api\Admin\BotProtectionController::class, 'updateSettings']);
+        });
     });
 });

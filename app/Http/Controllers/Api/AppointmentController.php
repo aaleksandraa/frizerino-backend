@@ -36,6 +36,53 @@ class AppointmentController extends Controller
     }
 
     /**
+     * Find or create a guest user by email.
+     * If user with email exists, return that user.
+     * Otherwise, create a new guest user that can later claim their appointments when they register.
+     */
+    private function findOrCreateGuestUser(array $data): ?\App\Models\User
+    {
+        // If no email provided, return null (appointment will be created without client_id)
+        if (empty($data['email'])) {
+            return null;
+        }
+
+        // Try to find existing user by email
+        $user = \App\Models\User::where('email', $data['email'])->first();
+
+        if ($user) {
+            // User exists - update info if provided data is more complete
+            $updates = [];
+
+            if (!empty($data['name']) && strlen($data['name']) > strlen($user->name)) {
+                $updates['name'] = $data['name'];
+            }
+
+            if (!empty($data['phone']) && $user->phone !== $data['phone']) {
+                $updates['phone'] = $data['phone'];
+            }
+
+            if (!empty($updates)) {
+                $user->update($updates);
+            }
+
+            return $user;
+        }
+
+        // Create new guest user
+        return \App\Models\User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
+            'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
+            'email_verified_at' => null,
+            'role' => 'klijent',
+            'is_guest' => DB::raw('true'),
+            'created_via' => 'booking',
+        ]);
+    }
+
+    /**
      * Display a listing of the appointments for the authenticated user.
      */
     public function index(Request $request): AnonymousResourceCollection
@@ -70,6 +117,22 @@ class AppointmentController extends Controller
                 $dateInput = Carbon::createFromFormat('d.m.Y', $dateInput)->format('Y-m-d');
             }
             $query->whereDate('date', $dateInput);
+        }
+
+        // Filter by date range (for calendar views - much more efficient than loading all appointments)
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $startDate = $request->start_date;
+            $endDate = $request->end_date;
+
+            // Convert European format to ISO if needed
+            if (preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $startDate)) {
+                $startDate = Carbon::createFromFormat('d.m.Y', $startDate)->format('Y-m-d');
+            }
+            if (preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $endDate)) {
+                $endDate = Carbon::createFromFormat('d.m.Y', $endDate)->format('Y-m-d');
+            }
+
+            $query->whereBetween('date', [$startDate, $endDate]);
         }
 
         // Filter by upcoming/past
@@ -145,8 +208,17 @@ class AppointmentController extends Controller
 
                 // Determine client info based on booking type
                 if ($isManualBooking) {
-                    // Manual booking by salon/frizer - use provided client info
-                    $clientId = null; // No registered client
+                    // Manual booking by salon/frizer - find or create guest user if email provided
+                    $guestUser = null;
+                    if (!empty($request->client_email)) {
+                        $guestUser = $this->findOrCreateGuestUser([
+                            'name' => $request->client_name,
+                            'email' => $request->client_email,
+                            'phone' => $request->client_phone,
+                        ]);
+                    }
+
+                    $clientId = $guestUser?->id;
                     $clientName = $request->client_name;
                     $clientEmail = $request->client_email;
                     $clientPhone = $request->client_phone;

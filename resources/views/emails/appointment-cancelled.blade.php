@@ -112,6 +112,44 @@
                                 </tr>
                             </table>
 
+                            <!-- Contact Info (for client emails) -->
+                            @if($recipientType === 'client')
+                            <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f0fdf4; border-radius: 8px; border: 1px solid #86efac; margin-bottom: 24px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="color: #166534; font-size: 15px; font-weight: 600; margin: 0 0 12px; text-align: center;">
+                                            💬 Imate pitanje?
+                                        </p>
+                                        <p style="color: #15803d; font-size: 14px; margin: 0 0 16px; text-align: center; line-height: 1.5;">
+                                            Kontaktirajte salon za više informacija:
+                                        </p>
+                                        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%;">
+                                            @if($appointment->salon->phone)
+                                            <tr>
+                                                <td style="text-align: center; padding: 4px 0;">
+                                                    <span style="color: #166534; font-size: 14px;">📞 </span>
+                                                    <a href="tel:{{ $appointment->salon->phone }}" style="color: #166534; text-decoration: none; font-weight: 500; font-size: 14px;">
+                                                        {{ $appointment->salon->phone }}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            @endif
+                                            @if($appointment->salon->email)
+                                            <tr>
+                                                <td style="text-align: center; padding: 4px 0;">
+                                                    <span style="color: #166534; font-size: 14px;">✉️ </span>
+                                                    <a href="mailto:{{ $appointment->salon->email }}" style="color: #166534; text-decoration: none; font-weight: 500; font-size: 14px;">
+                                                        {{ $appointment->salon->email }}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            @endif
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            @endif
+
                             <!-- CTA Button -->
                             @if($recipientType === 'client')
                             <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin-bottom: 24px;">

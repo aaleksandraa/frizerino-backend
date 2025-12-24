@@ -30,6 +30,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'role',
         'avatar',
         'email_verified_at',
+        'is_guest',
+        'created_via',
     ];
 
     /**
@@ -50,6 +52,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_guest' => 'boolean',
     ];
 
     /**
@@ -146,6 +149,14 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isClient(): bool
     {
         return $this->role === 'klijent';
+    }
+
+    /**
+     * Check if user is guest.
+     */
+    public function isGuest(): bool
+    {
+        return $this->is_guest === true;
     }
 
     /**

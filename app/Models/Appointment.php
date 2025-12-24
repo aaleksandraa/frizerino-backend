@@ -35,6 +35,8 @@ class Appointment extends Model
         'booking_source',
         'total_price',
         'payment_status',
+        'source',
+        'import_batch_id',
     ];
 
     /**
@@ -86,6 +88,14 @@ class Appointment extends Model
     public function review(): HasOne
     {
         return $this->hasOne(Review::class);
+    }
+
+    /**
+     * Get the import batch that owns the appointment.
+     */
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(ImportBatch::class);
     }
 
     /**

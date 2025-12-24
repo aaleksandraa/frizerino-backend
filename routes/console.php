@@ -6,50 +6,17 @@ use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+})->purpose('Display an inspiring quote')->hourly();
 
-// Schedule the appointment completion command to run every 5 minutes
-Schedule::command('appointments:complete-expired')->everyFiveMinutes();
-
-// Send appointment reminders every day at 9:00 AM
-Schedule::command('appointments:send-reminders')->dailyAt('09:00');
-
-// Cleanup old notifications every week on Sunday at midnight
-Schedule::command('notifications:cleanup --days=90')->weeklyOn(0, '00:00');
-
-// Process queued jobs (if using database queue driver)
-Schedule::command('queue:work --stop-when-empty')->everyMinute()->withoutOverlapping();
-
-// ============================================
-// BACKUP SCHEDULE
-// ============================================
-
-// Database backup - every day at 2:00 AM
-Schedule::command('backup:database --retention=30 --compress')
-    ->dailyAt('02:00')
+// Daily Reports Scheduler
+// Runs every day at 20:00 (8 PM) Sarajevo time
+Schedule::command('reports:send-daily')
+    ->dailyAt('20:00')
+    ->timezone('Europe/Sarajevo')
+    ->withoutOverlapping()
     ->onSuccess(function () {
-        \Illuminate\Support\Facades\Log::info('Scheduled database backup completed successfully');
+        \Illuminate\Support\Facades\Log::info('Daily reports sent successfully');
     })
     ->onFailure(function () {
-        \Illuminate\Support\Facades\Log::error('Scheduled database backup FAILED');
-    });
-
-// Files backup - every day at 3:00 AM
-Schedule::command('backup:files --retention=30')
-    ->dailyAt('03:00')
-    ->onSuccess(function () {
-        \Illuminate\Support\Facades\Log::info('Scheduled files backup completed successfully');
-    })
-    ->onFailure(function () {
-        \Illuminate\Support\Facades\Log::error('Scheduled files backup FAILED');
-    });
-
-// Full backup - every Saturday at 2:00 AM
-Schedule::command('backup:full --retention=90')
-    ->weeklyOn(6, '02:00')
-    ->onSuccess(function () {
-        \Illuminate\Support\Facades\Log::info('Scheduled full backup completed successfully');
-    })
-    ->onFailure(function () {
-        \Illuminate\Support\Facades\Log::error('Scheduled full backup FAILED');
+        \Illuminate\Support\Facades\Log::error('Daily reports failed to send');
     });

@@ -88,23 +88,20 @@ class SitemapController extends Controller
             $urls = [];
 
             // Get all unique cities from salons
-            $cities = Salon::where('status', 'active')
+            $cities = Salon::where('status', 'approved')
                 ->whereNotNull('city_slug')
                 ->select('city', 'city_slug')
                 ->distinct()
                 ->get();
 
-            // Categories matching frontend CityPage serviceCategories
+            // Categories matching frontend routes
             $categories = [
                 'frizeri',
                 'kozmeticari',
                 'manikir',
                 'pedikir',
                 'berber',
-                'depilacija',
                 'masaza',
-                'trepavice',
-                'obrve',
             ];
 
             foreach ($cities as $city) {
@@ -123,6 +120,15 @@ class SitemapController extends Controller
                         'changefreq' => 'daily',
                     ];
                 }
+            }
+
+            // Generic category pages (without city)
+            foreach ($categories as $categorySlug) {
+                $urls[] = [
+                    'loc' => $this->baseUrl . '/saloni/' . $categorySlug,
+                    'priority' => '0.8',
+                    'changefreq' => 'daily',
+                ];
             }
 
             // Also add locations from Location model
@@ -166,7 +172,7 @@ class SitemapController extends Controller
         $content = Cache::remember('sitemap_salons', 3600, function () {
             $urls = [];
 
-            $salons = Salon::where('status', 'active')
+            $salons = Salon::where('status', 'approved')
                 ->whereNotNull('slug')
                 ->select('slug', 'updated_at', 'rating', 'review_count')
                 ->get();
