@@ -676,4 +676,110 @@ class AppointmentController extends Controller
         // Each slot is 30 minutes
         return (int) floor($totalMinutes / 30);
     }
+
+    /**
+     * Get calendar capacity for a month (PUBLIC - for guest booking)
+     *
+     * @param Request $request
+     * @param int $salonId
+     * @return JsonResponse
+     */
+    public function getPublicMonthCapacity(Request $request, $salonId): JsonResponse
+    {
+        // Validate month parameter (YYYY-MM format)
+        $month = $request->query('month');
+        if (!$month || !preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return response()->json([
+                'message' => 'Invalid month format. Use YYYY-MM format.',
+            ], 422);
+        }
+
+        // Parse month
+        [$year, $monthNum] = explode('-', $month);
+        $startDate = Carbon::create($year, $monthNum, 1)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        // Get all appointments for the month for this salon
+        $appointments = Appointment::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->where('salon_id', $salonId)
+            ->whereIn('status', ['confirmed', 'in_progress', 'completed'])
+            ->get();
+
+        // Get salon working hours
+        $salon = Salon::find($salonId);
+        if (!$salon) {
+            return response()->json([
+                'message' => 'Salon not found.',
+            ], 404);
+        }
+
+        $workingHours = ['start' => 8, 'end' => 20]; // Default
+        if ($salon->working_hours) {
+            $hours = $salon->working_hours;
+            $earliestStart = 24;
+            $latestEnd = 0;
+
+            foreach ($hours as $day) {
+                if (isset($day['is_open']) && $day['is_open'] && isset($day['open']) && isset($day['close'])) {
+                    $startHour = (int) explode(':', $day['open'])[0];
+                    $endHour = (int) explode(':', $day['close'])[0];
+                    if ($startHour < $earliestStart) $earliestStart = $startHour;
+                    if ($endHour > $latestEnd) $latestEnd = $endHour;
+                }
+            }
+
+            if ($earliestStart < 24 && $latestEnd > 0) {
+                $workingHours = ['start' => $earliestStart, 'end' => $latestEnd];
+            }
+        }
+
+        // Calculate capacity for each day
+        $capacityData = [];
+        $currentDate = $startDate->copy();
+
+        while ($currentDate <= $endDate) {
+            $dateStr = $currentDate->format('Y-m-d');
+            $dayAppointments = $appointments->filter(function ($app) use ($dateStr) {
+                return $app->date === $dateStr;
+            });
+
+            // Calculate total slots (30-minute slots)
+            $totalSlots = $this->calculateTotalSlots($workingHours['start'], $workingHours['end']);
+            $occupiedSlots = $dayAppointments->count();
+            $freeSlots = max(0, $totalSlots - $occupiedSlots);
+            $percentage = $totalSlots > 0 ? round(($occupiedSlots / $totalSlots) * 100) : 0;
+
+            // Determine status and color
+            if ($percentage >= 100) {
+                $status = 'full';
+                $color = 'red';
+            } elseif ($percentage >= 70) {
+                $status = 'busy';
+                $color = 'yellow';
+            } elseif ($percentage > 0) {
+                $status = 'available';
+                $color = 'green';
+            } else {
+                $status = 'empty';
+                $color = 'gray';
+            }
+
+            $capacityData[] = [
+                'date' => $dateStr,
+                'total_slots' => $totalSlots,
+                'occupied_slots' => $occupiedSlots,
+                'free_slots' => $freeSlots,
+                'percentage' => $percentage,
+                'status' => $status,
+                'color' => $color,
+            ];
+
+            $currentDate->addDay();
+        }
+
+        return response()->json([
+            'month' => $month,
+            'capacity' => $capacityData,
+        ]);
+    }
 }

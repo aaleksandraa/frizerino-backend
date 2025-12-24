@@ -98,6 +98,9 @@ Route::prefix('v1')->group(function () {
             // Popular services for search suggestions
             Route::get('/services', [PublicController::class, 'popularServices']);
 
+            // Public capacity endpoint for guest booking
+            Route::get('/salons/{salon}/capacity/month', [AppointmentController::class, 'getPublicMonthCapacity']);
+
             // Available time slots (public)
             Route::get('/available-slots', [PublicController::class, 'availableSlots']);
 
