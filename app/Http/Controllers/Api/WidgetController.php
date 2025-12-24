@@ -258,6 +258,112 @@ class WidgetController extends Controller
     }
 
     /**
+     * Get available dates for a month (dates that have at least one available slot)
+     */
+    public function availableDates(Request $request): JsonResponse
+    {
+        $apiKey = $request->input('key');
+
+        // Use whereRaw for PostgreSQL boolean compatibility
+        $widgetSetting = WidgetSetting::where('api_key', $apiKey)
+            ->whereRaw('is_active = true')
+            ->first();
+
+        if (!$widgetSetting) {
+            return response()->json(['error' => 'Invalid API key'], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'staff_id' => 'required|integer|exists:staff,id',
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'], // YYYY-MM format
+            'services' => 'required|array|min:1',
+            'services.*.serviceId' => 'required|exists:services,id',
+            'services.*.duration' => 'required|integer|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 422);
+        }
+
+        $staffId = $request->input('staff_id');
+        $staff = Staff::findOrFail($staffId);
+
+        if ($staff->salon_id != $widgetSetting->salon_id) {
+            return response()->json(['error' => 'Invalid staff for this salon'], 403);
+        }
+
+        $salon = Salon::findOrFail($widgetSetting->salon_id);
+        $salonService = app(\App\Services\SalonService::class);
+
+        // Parse month
+        $monthStr = $request->input('month');
+        $year = (int) substr($monthStr, 0, 4);
+        $month = (int) substr($monthStr, 5, 2);
+
+        // Get first and last day of month
+        $firstDay = Carbon::createFromDate($year, $month, 1);
+        $lastDay = $firstDay->copy()->endOfMonth();
+        $today = Carbon::today();
+
+        $servicesData = array_map(function($service) use ($staffId) {
+            return [
+                'serviceId' => $service['serviceId'],
+                'staffId' => $staffId,
+                'duration' => $service['duration'],
+            ];
+        }, $request->input('services'));
+
+        $availableDates = [];
+        $unavailableDates = [];
+
+        // Check each day in the month
+        for ($day = $firstDay->copy(); $day <= $lastDay; $day->addDay()) {
+            $dateStr = $day->format('d.m.Y');
+            $isoDate = $day->format('Y-m-d');
+
+            // Skip past dates
+            if ($day < $today) {
+                $unavailableDates[] = $isoDate;
+                continue;
+            }
+
+            // Check if salon is open on this day
+            $dayOfWeek = strtolower($day->format('l'));
+            $salonHours = $salon->working_hours[$dayOfWeek] ?? null;
+            if (!$salonHours || !$salonHours['is_open']) {
+                $unavailableDates[] = $isoDate;
+                continue;
+            }
+
+            // Check if staff is working on this day
+            $staffHours = $staff->working_hours[$dayOfWeek] ?? null;
+            if (!$staffHours || !$staffHours['is_working']) {
+                $unavailableDates[] = $isoDate;
+                continue;
+            }
+
+            // Get available slots for this day
+            $slots = $salonService->getAvailableTimeSlotsForMultipleServices(
+                $salon,
+                $dateStr,
+                $servicesData
+            );
+
+            if (count($slots) > 0) {
+                $availableDates[] = $isoDate;
+            } else {
+                $unavailableDates[] = $isoDate;
+            }
+        }
+
+        return response()->json([
+            'available_dates' => $availableDates,
+            'unavailable_dates' => $unavailableDates,
+            'month' => $monthStr,
+        ]);
+    }
+
+    /**
      * Debug endpoint to check appointments for a staff member on a specific date
      * This helps diagnose why slots might appear available when they shouldn't be
      */
