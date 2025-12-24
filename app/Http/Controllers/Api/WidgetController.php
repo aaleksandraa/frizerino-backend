@@ -13,7 +13,6 @@ use App\Models\Service;
 use App\Models\Staff;
 use App\Services\NotificationService;
 use App\Mail\AppointmentConfirmationMail;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
@@ -70,7 +69,7 @@ class WidgetController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => DB::raw('true'),
+            'is_guest' => true,
             'created_via' => 'widget',
         ]);
     }
@@ -86,14 +85,28 @@ class WidgetController extends Controller
             return response()->json(['error' => 'API key is required'], 401);
         }
 
-        // PostgreSQL requires DB::raw('true') for boolean columns
-        $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', DB::raw('true'))
-            ->first();
+        // First, try to find widget by API key only (for debugging)
+        $widgetByKey = WidgetSetting::where('api_key', $apiKey)->first();
 
-        if (!$widgetSetting) {
-            return response()->json(['error' => 'Invalid or inactive API key'], 401);
+        if (!$widgetByKey) {
+            Log::warning('Widget API: API key not found in database', [
+                'api_key_prefix' => substr($apiKey, 0, 20) . '...',
+                'salon_slug' => $salonSlug,
+            ]);
+            return response()->json(['error' => 'Invalid API key - not found'], 401);
         }
+
+        // Check if widget is active
+        if (!$widgetByKey->is_active) {
+            Log::warning('Widget API: Widget is inactive', [
+                'widget_id' => $widgetByKey->id,
+                'is_active' => $widgetByKey->is_active,
+                'is_active_type' => gettype($widgetByKey->is_active),
+            ]);
+            return response()->json(['error' => 'Widget is inactive'], 401);
+        }
+
+        $widgetSetting = $widgetByKey;
 
         $referer = $request->headers->get('referer');
         $domain = $referer ? parse_url($referer, PHP_URL_HOST) : null;
@@ -106,14 +119,13 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Domain not allowed'], 403);
         }
 
-        // PostgreSQL requires DB::raw('true') for boolean columns
         // Sort services by display_order, staff by display_order
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', DB::raw('true'))
+            $query->where('is_active', true)
                   ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
-            $query->where('is_active', DB::raw('true'))
+            $query->where('is_active', true)
                   ->orderBy('display_order')
                   ->orderBy('name');
         }])
@@ -190,7 +202,7 @@ class WidgetController extends Controller
         $apiKey = $request->input('key');
 
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', DB::raw('true'))
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -318,7 +330,7 @@ class WidgetController extends Controller
         $apiKey = $request->input('api_key');
 
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', DB::raw('true'))
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {

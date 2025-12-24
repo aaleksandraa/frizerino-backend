@@ -10,7 +10,6 @@ use App\Models\WidgetSetting;
 use App\Models\WidgetAnalytics;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AdminWidgetController extends Controller
@@ -91,7 +90,7 @@ class AdminWidgetController extends Controller
             $widget = WidgetSetting::create([
                 'salon_id' => $salonId,
                 'api_key' => $this->generateUniqueApiKey(),
-                'is_active' => DB::raw('true'),
+                'is_active' => true,
                 'theme' => [
                     'primaryColor' => '#FF6B35',
                     'secondaryColor' => '#F7931E',
@@ -142,7 +141,7 @@ class AdminWidgetController extends Controller
         $updateData = [];
 
         if ($request->has('is_active')) {
-            $updateData['is_active'] = $request->input('is_active') ? DB::raw('true') : DB::raw('false');
+            $updateData['is_active'] = (bool) $request->input('is_active');
         }
 
         if ($request->has('allowed_domains')) {
@@ -174,7 +173,7 @@ class AdminWidgetController extends Controller
         $widget = WidgetSetting::where('salon_id', $salonId)->firstOrFail();
 
         // Soft delete - just deactivate
-        $widget->update(['is_active' => DB::raw('false')]);
+        $widget->update(['is_active' => false]);
 
         return response()->json([
             'success' => true,
