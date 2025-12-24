@@ -8,6 +8,7 @@ use App\Models\Review;
 use App\Models\Salon;
 use App\Models\User;
 use App\Mail\AppointmentCancelledMail;
+use App\Mail\NewAppointmentNotificationMail;
 use App\Mail\ReviewRequestMail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -64,6 +65,15 @@ class NotificationService
             'related_id' => $appointment->id,
         ]);
 
+        // Send email to salon owner
+        if ($owner->email) {
+            try {
+                Mail::to($owner->email)->send(new NewAppointmentNotificationMail($appointment, 'salon'));
+            } catch (\Exception $e) {
+                Log::warning('Failed to send new appointment email to salon owner: ' . $e->getMessage());
+            }
+        }
+
         // Notify staff member
         if ($staff->user_id) {
             Notification::create([
@@ -73,6 +83,16 @@ class NotificationService
                 'recipient_id' => $staff->user_id,
                 'related_id' => $appointment->id,
             ]);
+
+            // Send email to staff member
+            $staffUser = User::find($staff->user_id);
+            if ($staffUser && $staffUser->email) {
+                try {
+                    Mail::to($staffUser->email)->send(new NewAppointmentNotificationMail($appointment, 'staff'));
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send new appointment email to staff: ' . $e->getMessage());
+                }
+            }
         }
 
         // Only notify client if they are a registered user (not a guest)
