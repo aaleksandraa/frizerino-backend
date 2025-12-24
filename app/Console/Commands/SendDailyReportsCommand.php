@@ -45,7 +45,8 @@ class SendDailyReportsCommand extends Command
 
         // Determine date for report
         $dateInput = $this->option('date');
-        $date = $dateInput ? Carbon::parse($dateInput) : Carbon::yesterday();
+        // Use TODAY for automatic sending (sent in evening after work hours)
+        $date = $dateInput ? Carbon::parse($dateInput) : Carbon::today();
 
         $this->info("Generating reports for: {$date->format('d.m.Y')}");
 

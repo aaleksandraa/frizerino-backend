@@ -184,6 +184,8 @@ Route::prefix('v1')->group(function () {
             Route::put('/', [SalonSettingsController::class, 'update']);
             Route::post('/test-report', [SalonSettingsController::class, 'sendTestReport']);
             Route::get('/preview-report', [SalonSettingsController::class, 'previewReport']);
+            Route::get('/monthly-report', [SalonSettingsController::class, 'getMonthlyReport']);
+            Route::post('/send-monthly-report', [SalonSettingsController::class, 'sendMonthlyReport']);
         });
         Route::post('/user/appointments', [AppointmentController::class, 'store']);
         Route::get('/user/appointments/{appointment}', [AppointmentController::class, 'show']);
@@ -231,6 +233,7 @@ Route::prefix('v1')->group(function () {
         // Appointment routes
         Route::get('/appointments', [AppointmentController::class, 'index']);
         Route::post('/appointments', [AppointmentController::class, 'store']);
+        Route::get('/appointments/capacity/month', [AppointmentController::class, 'getMonthCapacity']);
         Route::get('/appointments/{appointment}', [AppointmentController::class, 'show']);
         Route::put('/appointments/{appointment}', [AppointmentController::class, 'update']);
         Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy']);

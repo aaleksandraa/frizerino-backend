@@ -506,4 +506,174 @@ class AppointmentController extends Controller
             'appointment' => new AppointmentResource($appointment->load(['salon', 'staff', 'service'])),
         ]);
     }
+
+    /**
+     * Get calendar capacity for a month.
+     * Returns capacity data for each day in the specified month.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getMonthCapacity(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            abort(401, 'Unauthorized');
+        }
+
+        // Validate month parameter (YYYY-MM format)
+        $month = $request->query('month');
+        if (!$month || !preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return response()->json([
+                'message' => 'Invalid month format. Use YYYY-MM format.',
+            ], 422);
+        }
+
+        // Parse month
+        [$year, $monthNum] = explode('-', $month);
+        $startDate = Carbon::create($year, $monthNum, 1)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        // Determine salon and staff based on user role
+        $salonId = null;
+        $staffId = null;
+
+        if ($user->isSalonOwner()) {
+            $salonId = $user->ownedSalon->id;
+        } elseif ($user->isStaff()) {
+            $salonId = $user->staffProfile->salon_id;
+            $staffId = $user->staffProfile->id;
+        } else {
+            return response()->json([
+                'message' => 'Unauthorized. Only salon owners and staff can access capacity data.',
+            ], 403);
+        }
+
+        // Get all appointments for the month
+        $query = Appointment::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->where('salon_id', $salonId)
+            ->whereIn('status', ['confirmed', 'in_progress', 'completed']);
+
+        if ($staffId) {
+            $query->where('staff_id', $staffId);
+        }
+
+        $appointments = $query->get();
+
+        // Get working hours
+        $workingHours = $this->getWorkingHours($user, $staffId);
+
+        // Calculate capacity for each day
+        $capacityData = [];
+        $currentDate = $startDate->copy();
+
+        while ($currentDate <= $endDate) {
+            $dateStr = $currentDate->format('Y-m-d');
+            $dayAppointments = $appointments->filter(function ($app) use ($dateStr) {
+                return $app->date === $dateStr;
+            });
+
+            // Calculate total slots (30-minute slots)
+            $totalSlots = $this->calculateTotalSlots($workingHours['start'], $workingHours['end']);
+            $occupiedSlots = $dayAppointments->count();
+            $freeSlots = max(0, $totalSlots - $occupiedSlots);
+            $percentage = $totalSlots > 0 ? round(($occupiedSlots / $totalSlots) * 100) : 0;
+
+            // Determine status and color
+            if ($percentage >= 100) {
+                $status = 'full';
+                $color = 'red';
+            } elseif ($percentage >= 70) {
+                $status = 'busy';
+                $color = 'yellow';
+            } elseif ($percentage > 0) {
+                $status = 'available';
+                $color = 'green';
+            } else {
+                $status = 'empty';
+                $color = 'gray';
+            }
+
+            $capacityData[] = [
+                'date' => $dateStr,
+                'total_slots' => $totalSlots,
+                'occupied_slots' => $occupiedSlots,
+                'free_slots' => $freeSlots,
+                'percentage' => $percentage,
+                'status' => $status,
+                'color' => $color,
+            ];
+
+            $currentDate->addDay();
+        }
+
+        return response()->json([
+            'month' => $month,
+            'capacity' => $capacityData,
+        ]);
+    }
+
+    /**
+     * Get working hours for salon or staff
+     */
+    private function getWorkingHours($user, $staffId = null): array
+    {
+        if ($staffId) {
+            $staff = Staff::find($staffId);
+            if ($staff && $staff->working_hours) {
+                $hours = $staff->working_hours;
+                $earliestStart = 24;
+                $latestEnd = 0;
+
+                foreach ($hours as $day) {
+                    if (isset($day['is_working']) && $day['is_working'] && isset($day['start']) && isset($day['end'])) {
+                        $startHour = (int) explode(':', $day['start'])[0];
+                        $endHour = (int) explode(':', $day['end'])[0];
+                        if ($startHour < $earliestStart) $earliestStart = $startHour;
+                        if ($endHour > $latestEnd) $latestEnd = $endHour;
+                    }
+                }
+
+                if ($earliestStart < 24 && $latestEnd > 0) {
+                    return ['start' => $earliestStart, 'end' => $latestEnd];
+                }
+            }
+        }
+
+        // Use salon working hours
+        if ($user->isSalonOwner() && $user->ownedSalon->working_hours) {
+            $hours = $user->ownedSalon->working_hours;
+            $earliestStart = 24;
+            $latestEnd = 0;
+
+            foreach ($hours as $day) {
+                if (isset($day['is_open']) && $day['is_open'] && isset($day['open']) && isset($day['close'])) {
+                    $startHour = (int) explode(':', $day['open'])[0];
+                    $endHour = (int) explode(':', $day['close'])[0];
+                    if ($startHour < $earliestStart) $earliestStart = $startHour;
+                    if ($endHour > $latestEnd) $latestEnd = $endHour;
+                }
+            }
+
+            if ($earliestStart < 24 && $latestEnd > 0) {
+                return ['start' => $earliestStart, 'end' => $latestEnd];
+            }
+        }
+
+        // Default working hours
+        return ['start' => 8, 'end' => 20];
+    }
+
+    /**
+     * Calculate total available slots based on working hours
+     */
+    private function calculateTotalSlots(int $startHour, int $endHour): int
+    {
+        $startMinutes = $startHour * 60;
+        $endMinutes = $endHour * 60;
+        $totalMinutes = $endMinutes - $startMinutes;
+
+        // Each slot is 30 minutes
+        return (int) floor($totalMinutes / 30);
+    }
 }

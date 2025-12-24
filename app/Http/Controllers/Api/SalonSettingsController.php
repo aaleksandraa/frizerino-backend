@@ -7,6 +7,7 @@ use App\Mail\DailyReportMail;
 use App\Models\Salon;
 use App\Models\SalonSettings;
 use App\Services\DailyReportService;
+use App\Services\MonthlyReportService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +17,12 @@ use Illuminate\Support\Facades\Validator;
 class SalonSettingsController extends Controller
 {
     protected DailyReportService $reportService;
+    protected MonthlyReportService $monthlyReportService;
 
-    public function __construct(DailyReportService $reportService)
+    public function __construct(DailyReportService $reportService, MonthlyReportService $monthlyReportService)
     {
         $this->reportService = $reportService;
+        $this->monthlyReportService = $monthlyReportService;
     }
 
     /**
@@ -188,8 +191,8 @@ class SalonSettingsController extends Controller
 
         $settings = $salon->settings;
 
-        // Use yesterday's data for test report
-        $date = Carbon::yesterday();
+        // Use TODAY's data for test report (not yesterday!)
+        $date = Carbon::today();
 
         try {
             // Generate report data
@@ -234,8 +237,8 @@ class SalonSettingsController extends Controller
             ], 404);
         }
 
-        // Use yesterday's data for preview
-        $date = Carbon::yesterday();
+        // Use TODAY's data for preview (not yesterday!)
+        $date = Carbon::today();
 
         try {
             $reportData = $this->reportService->generateReport($salon, $date);
@@ -247,6 +250,96 @@ class SalonSettingsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Greška pri generisanju pregleda izvještaja',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get monthly report data.
+     */
+    public function getMonthlyReport(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user->isSalonOwner()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $salon = $user->ownedSalon;
+
+        if (!$salon) {
+            return response()->json([
+                'message' => 'Salon not found. Please complete your salon profile first.',
+                'error' => 'NO_SALON'
+            ], 404);
+        }
+
+        // Get month from query parameter or use current month
+        $monthInput = $request->query('month'); // Format: YYYY-MM
+        $month = $monthInput ? Carbon::parse($monthInput . '-01') : Carbon::now();
+
+        try {
+            $reportData = $this->monthlyReportService->generateReport($salon, $month);
+
+            return response()->json([
+                'report' => $reportData,
+                'month' => $month->format('m.Y'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Greška pri generisanju mjesečnog izvještaja',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Send monthly report via email.
+     */
+    public function sendMonthlyReport(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user->isSalonOwner()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $salon = $user->ownedSalon;
+
+        if (!$salon) {
+            return response()->json([
+                'message' => 'Salon not found. Please complete your salon profile first.',
+                'error' => 'NO_SALON'
+            ], 404);
+        }
+
+        $settings = $salon->settings;
+
+        // Get month from request or use previous month
+        $monthInput = $request->input('month'); // Format: YYYY-MM
+        $month = $monthInput ? Carbon::parse($monthInput . '-01') : Carbon::now()->subMonth();
+
+        try {
+            // Generate report data
+            $reportData = $this->monthlyReportService->generateReport($salon, $month);
+
+            // Determine email address
+            $email = $settings?->daily_report_email ?? $salon->owner->email;
+
+            // TODO: Create MonthlyReportMail class
+            // For now, return the data
+            // Mail::to($email)->send(new MonthlyReportMail($salon, $reportData, $month));
+
+            return response()->json([
+                'message' => "Mjesečni izvještaj za " . $month->locale('bs')->isoFormat('MMMM YYYY') . " je spreman",
+                'email' => $email,
+                'month' => $month->format('m.Y'),
+                'report' => $reportData,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Greška pri slanju mjesečnog izvještaja',
                 'error' => $e->getMessage(),
             ], 500);
         }
