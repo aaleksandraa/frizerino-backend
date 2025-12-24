@@ -120,12 +120,13 @@ class WidgetController extends Controller
         }
 
         // Sort services by display_order, staff by display_order
+        // Use whereRaw for PostgreSQL boolean compatibility
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', true)
+            $query->whereRaw('is_active = true')
                   ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
-            $query->where('is_active', true)
+            $query->whereRaw('is_active = true')
                   ->orderBy('display_order')
                   ->orderBy('name');
         }])

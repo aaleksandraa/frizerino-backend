@@ -40,13 +40,13 @@ try {
         'is_active_type' => gettype($widget->is_active),
     ]);
 
-    // Find salon
+    // Find salon - use whereRaw for PostgreSQL boolean compatibility
     $salon = \App\Models\Salon::with(['services' => function($query) {
-        $query->where('is_active', true)
+        $query->whereRaw('is_active = true')
               ->orderBy('display_order')
               ->orderBy('id');
     }, 'staff' => function($query) {
-        $query->where('is_active', true)
+        $query->whereRaw('is_active = true')
               ->orderBy('display_order')
               ->orderBy('name');
     }])
