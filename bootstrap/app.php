@@ -29,11 +29,11 @@ return Application::configure()
         // Dodaj Security Headers middleware za sve API rute
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
 
-        // Dodaj Bot Protection middleware za sve public rute
-        $middleware->append(\App\Http\Middleware\BotProtection::class);
-
         // Dodaj Sentry context middleware
         $middleware->append(\App\Http\Middleware\SentryContext::class);
+
+        // NOTE: BotProtection is available as 'bot.protection' middleware alias
+        // Apply it selectively on specific routes if needed, not globally
 
         // Dodaj stateful middleware za Sanctum SPA autentifikaciju
         $middleware->statefulApi();
