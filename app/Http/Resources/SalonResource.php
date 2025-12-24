@@ -76,6 +76,9 @@ class SalonResource extends JsonResource
                 return $this->salonVacations;
             }),
             'owner' => $this->when($this->relationLoaded('owner'), function () {
+                if (!$this->owner) {
+                    return null;
+                }
                 return [
                     'id' => $this->owner->id,
                     'name' => $this->owner->name,

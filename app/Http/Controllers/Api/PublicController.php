@@ -359,8 +359,7 @@ class PublicController extends Controller
                 },
                 'owner:id,name,email'
             ])
-            ->withCount(['reviews', 'staff'])
-            ->select('id', 'name', 'slug', 'city', 'city_slug', 'address', 'phone', 'description', 'latitude', 'longitude', 'average_rating', 'is_approved'); // Only needed fields
+            ->withCount(['reviews', 'staff']);
 
         // Filter by date and time availability
         if ($request->filled('date') || $request->filled('time')) {
