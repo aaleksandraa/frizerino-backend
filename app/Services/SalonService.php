@@ -198,9 +198,18 @@ class SalonService
             'last_slot' => end($slots) ?: null
         ]);
 
+        // CRITICAL: Filter out past slots for today
+        $isToday = ($isoDate === date('Y-m-d'));
+        $currentTime = date('H:i');
+
         // Filter out slots that are not available
         $availableSlots = [];
         foreach ($slots as $slot) {
+            // Skip past slots for today
+            if ($isToday && $slot <= $currentTime) {
+                continue;
+            }
+
             // Use the total duration for availability check
             if ($staff->isAvailable($date, $slot, $duration)) {
                 $availableSlots[] = $slot;
@@ -350,7 +359,17 @@ class SalonService
 
         // Filter slots where staff is available for the TOTAL duration
         $availableSlots = [];
+
+        // CRITICAL: Filter out past slots for today
+        $isToday = ($isoDate === date('Y-m-d'));
+        $currentTime = date('H:i');
+
         foreach ($potentialSlots as $slot) {
+            // Skip past slots for today
+            if ($isToday && $slot <= $currentTime) {
+                continue;
+            }
+
             // Check if staff is available for the entire duration starting at this slot
             if ($staff->isAvailable($date, $slot, $totalDuration)) {
                 $availableSlots[] = $slot;
@@ -360,6 +379,8 @@ class SalonService
         \Log::info('Available slots result', [
             'potential' => count($potentialSlots),
             'available' => count($availableSlots),
+            'is_today' => $isToday,
+            'current_time' => $currentTime,
             'first' => $availableSlots[0] ?? null,
             'last' => end($availableSlots) ?: null
         ]);
