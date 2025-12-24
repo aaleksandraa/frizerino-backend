@@ -202,8 +202,9 @@ class WidgetController extends Controller
     {
         $apiKey = $request->input('key');
 
+        // Use whereRaw for PostgreSQL boolean compatibility
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -330,8 +331,9 @@ class WidgetController extends Controller
     {
         $apiKey = $request->input('api_key');
 
+        // Use whereRaw for PostgreSQL boolean compatibility
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
