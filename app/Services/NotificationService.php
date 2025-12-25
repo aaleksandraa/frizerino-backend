@@ -66,7 +66,7 @@ class NotificationService
         ]);
 
         // Send email to salon owner
-        if ($owner->email) {
+        if ($owner->email && $salon->email_notifications_enabled) {
             try {
                 Mail::to($owner->email)->send(new NewAppointmentNotificationMail($appointment, 'salon'));
             } catch (\Exception $e) {

@@ -51,6 +51,7 @@ class Salon extends Model
         'booking_slot_interval',
         'show_service_gallery',
         'category_order',
+        'email_notifications_enabled',
     ];
 
     /**
@@ -69,6 +70,7 @@ class Salon extends Model
         'meta_keywords' => 'json',
         'is_verified' => 'boolean',
         'auto_confirm' => 'boolean',
+        'email_notifications_enabled' => 'boolean',
         'rating' => 'float',
         'review_count' => 'integer',
         'latitude' => 'float',

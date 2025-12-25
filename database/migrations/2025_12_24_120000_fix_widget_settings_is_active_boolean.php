@@ -15,9 +15,7 @@ return new class extends Migration
     {
         // For PostgreSQL, ensure all widget_settings have is_active = true
         // This is safe because we want all existing widgets to be active
-        DB::table('widget_settings')
-            ->whereNull('is_active')
-            ->update(['is_active' => true]);
+        DB::statement("UPDATE widget_settings SET is_active = true WHERE is_active IS NULL");
     }
 
     /**
