@@ -635,10 +635,29 @@ class PublicController extends Controller
                         'time' => $appointment->time,
                         'end_time' => $appointment->end_time,
                         'status' => $appointment->status,
-                        'salon' => $salon->name,
-                        'staff' => $staff->name,
-                        'service' => $service->name,
                         'total_price' => $appointment->total_price,
+                        'client_email' => $appointment->client_email,
+                        // Nested objects for SuccessModal
+                        'salon' => [
+                            'id' => $salon->id,
+                            'name' => $salon->name,
+                            'address' => $salon->address,
+                            'city' => $salon->city,
+                        ],
+                        'staff' => [
+                            'id' => $staff->id,
+                            'name' => $staff->name,
+                            'role' => $staff->role,
+                        ],
+                        'service' => [
+                            'id' => $service->id,
+                            'name' => $service->name,
+                            'duration' => $service->duration,
+                            'price' => $service->price,
+                        ],
+                        // Also include flat structure for compatibility
+                        'service_name' => $service->name,
+                        'staff_name' => $staff->name,
                     ],
                     'confirmation_message' => $initialStatus === 'confirmed'
                         ? 'Vaš termin je potvrđen. Vidimo se!'

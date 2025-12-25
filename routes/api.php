@@ -111,6 +111,9 @@ Route::prefix('v1')->group(function () {
             // Guest booking (no auth required)
             Route::post('/book', [PublicController::class, 'storeGuestAppointment']);
 
+            // Public ICS download (no auth required)
+            Route::get('/appointments/{appointment}/ics', [AppointmentController::class, 'downloadIcs']);
+
             // Sitemap for SEO
             Route::get('/sitemap', [PublicController::class, 'sitemap']);
 
@@ -239,6 +242,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/appointments', [AppointmentController::class, 'store']);
         Route::get('/appointments/capacity/month', [AppointmentController::class, 'getMonthCapacity']);
         Route::get('/appointments/{appointment}', [AppointmentController::class, 'show']);
+        Route::get('/appointments/{appointment}/ics', [AppointmentController::class, 'downloadIcs']);
         Route::put('/appointments/{appointment}', [AppointmentController::class, 'update']);
         Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy']);
         Route::put('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel']);

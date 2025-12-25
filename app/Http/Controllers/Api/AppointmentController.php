@@ -782,4 +782,139 @@ class AppointmentController extends Controller
             'capacity' => $capacityData,
         ]);
     }
+
+    /**
+     * Generate and download ICS calendar file for an appointment.
+     * Public endpoint - no authentication required.
+     *
+     * @param int $appointmentId
+     * @return \Illuminate\Http\Response
+     */
+    public function downloadIcs($appointmentId)
+    {
+        try {
+            // Find appointment by ID
+            $appointment = Appointment::with(['salon', 'staff', 'service'])->findOrFail($appointmentId);
+
+            // Generate ICS content
+            $icsContent = $this->generateIcsContent($appointment);
+
+            // Return as downloadable file
+            return response($icsContent, 200)
+                ->header('Content-Type', 'text/calendar; charset=utf-8')
+                ->header('Content-Disposition', 'attachment; filename="termin-' . $appointment->id . '.ics"');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'Termin nije pronađen',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('ICS download error', [
+                'appointment_id' => $appointmentId ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri generisanju ICS fajla',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate ICS file content for an appointment.
+     *
+     * @param Appointment $appointment
+     * @return string
+     */
+    private function generateIcsContent(Appointment $appointment): string
+    {
+        // Parse date and time - handle both string and Carbon object
+        if ($appointment->date instanceof \Carbon\Carbon) {
+            $dateStr = $appointment->date->format('Y-m-d');
+        } else {
+            $dateStr = $appointment->date;
+        }
+
+        // Create Carbon instances for start and end times
+        $startTime = Carbon::createFromFormat('Y-m-d H:i', $dateStr . ' ' . $appointment->time);
+
+        // Handle end_time which might have seconds (HH:MM:SS)
+        $endTimeStr = substr($appointment->end_time, 0, 5); // Get HH:MM only
+        $endTime = Carbon::createFromFormat('Y-m-d H:i', $dateStr . ' ' . $endTimeStr);
+
+        // Format dates for ICS (local time format)
+        $dtStamp = Carbon::now()->format('Ymd\THis\Z');
+        $dtStart = $startTime->format('Ymd\THis');
+        $dtEnd = $endTime->format('Ymd\THis');
+
+        // Build description
+        $description = $appointment->service->name;
+        if ($appointment->notes) {
+            $description .= '\\n\\nNapomene: ' . $this->escapeIcsText($appointment->notes);
+        }
+        $description .= '\\n\\nFrizer: ' . $appointment->staff->name;
+        $description .= '\\nCijena: ' . number_format($appointment->total_price, 2) . ' KM';
+
+        // Build location
+        $location = $appointment->salon->name;
+        if ($appointment->salon->address) {
+            $location .= ', ' . $appointment->salon->address;
+        }
+        if ($appointment->salon->city) {
+            $location .= ', ' . $appointment->salon->city;
+        }
+
+        // Build summary
+        $summary = $appointment->service->name . ' - ' . $appointment->salon->name;
+
+        // Generate UID
+        $uid = 'appointment-' . $appointment->id . '@frizerino.com';
+
+        // Build ICS content
+        $ics = "BEGIN:VCALENDAR\r\n";
+        $ics .= "VERSION:2.0\r\n";
+        $ics .= "PRODID:-//Frizerino//Appointment//EN\r\n";
+        $ics .= "CALSCALE:GREGORIAN\r\n";
+        $ics .= "METHOD:PUBLISH\r\n";
+        $ics .= "BEGIN:VEVENT\r\n";
+        $ics .= "UID:" . $uid . "\r\n";
+        $ics .= "DTSTAMP:" . $dtStamp . "\r\n";
+        $ics .= "DTSTART:" . $dtStart . "\r\n";
+        $ics .= "DTEND:" . $dtEnd . "\r\n";
+        $ics .= "SUMMARY:" . $this->escapeIcsText($summary) . "\r\n";
+        $ics .= "DESCRIPTION:" . $description . "\r\n";
+        $ics .= "LOCATION:" . $this->escapeIcsText($location) . "\r\n";
+        $ics .= "STATUS:CONFIRMED\r\n";
+
+        // Add reminder (1 hour before)
+        $ics .= "BEGIN:VALARM\r\n";
+        $ics .= "TRIGGER:-PT1H\r\n";
+        $ics .= "ACTION:DISPLAY\r\n";
+        $ics .= "DESCRIPTION:Podsjetnik: " . $this->escapeIcsText($summary) . " za 1 sat\r\n";
+        $ics .= "END:VALARM\r\n";
+
+        $ics .= "END:VEVENT\r\n";
+        $ics .= "END:VCALENDAR\r\n";
+
+        return $ics;
+    }
+
+    /**
+     * Escape text for ICS format.
+     *
+     * @param string $text
+     * @return string
+     */
+    private function escapeIcsText(string $text): string
+    {
+        // Escape special characters for ICS format
+        $text = str_replace('\\', '\\\\', $text);
+        $text = str_replace(',', '\\,', $text);
+        $text = str_replace(';', '\\;', $text);
+        $text = str_replace("\n", '\\n', $text);
+        $text = str_replace("\r", '', $text);
+
+        return $text;
+    }
 }

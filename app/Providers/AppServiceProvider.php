@@ -24,5 +24,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Register policies
         Gate::policy(Service::class, ServicePolicy::class);
+
+        // Register observers
+        \App\Models\Appointment::observe(\App\Observers\AppointmentObserver::class);
     }
 }
