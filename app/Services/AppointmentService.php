@@ -171,7 +171,7 @@ class AppointmentService
     /**
      * Get available dates for a staff member and service.
      */
-    public function getAvailableDates(Staff $staff, int $serviceId, int $daysAhead = 30): array
+    public function getAvailableDates(Staff $staff, int $serviceId, int $daysAhead = 90): array
     {
         $service = $staff->services()->findOrFail($serviceId);
         $availableDates = [];
