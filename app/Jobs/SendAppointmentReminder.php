@@ -38,19 +38,28 @@ class SendAppointmentReminder implements ShouldQueue
     public function handle(NotificationService $notificationService): void
     {
         try {
-            // Send reminder notification to client
-            $notificationService->create(
-                $this->appointment->client_id,
-                'appointment_reminder',
-                'Podsjetnik: Imate termin sutra',
-                "Vaš termin za {$this->appointment->service->name} u salonu {$this->appointment->salon->name} je zakazan za sutra u {$this->appointment->time}.",
-                [
+            // Load relationships
+            $this->appointment->load(['salon', 'service', 'staff', 'client']);
+
+            // Send in-app notification
+            $notificationService->sendAppointmentReminderNotification($this->appointment);
+
+            // Send email reminder if client has email
+            if ($this->appointment->client && $this->appointment->client->email) {
+                \Illuminate\Support\Facades\Mail::to($this->appointment->client->email)
+                    ->send(new \App\Mail\AppointmentReminderMail($this->appointment));
+
+                Log::info('Appointment reminder email sent', [
                     'appointment_id' => $this->appointment->id,
-                    'salon_id' => $this->appointment->salon_id,
-                    'date' => $this->appointment->date->format('d.m.Y'),
-                    'time' => $this->appointment->time,
-                ]
-            );
+                    'client_id' => $this->appointment->client_id,
+                    'client_email' => $this->appointment->client->email,
+                ]);
+            } else {
+                Log::warning('Appointment reminder email not sent - no client email', [
+                    'appointment_id' => $this->appointment->id,
+                    'client_id' => $this->appointment->client_id,
+                ]);
+            }
 
             Log::info('Appointment reminder sent', [
                 'appointment_id' => $this->appointment->id,
@@ -60,6 +69,7 @@ class SendAppointmentReminder implements ShouldQueue
             Log::error('Failed to send appointment reminder', [
                 'appointment_id' => $this->appointment->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             throw $e;
