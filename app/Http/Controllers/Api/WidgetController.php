@@ -62,6 +62,7 @@ class WidgetController extends Controller
         }
 
         // Create new guest user
+        // FIXED: Boolean cast will handle conversion automatically
         return \App\Models\User::create([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -69,7 +70,7 @@ class WidgetController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => true,
+            'is_guest' => true, // Model cast handles boolean conversion
             'created_via' => 'widget',
         ]);
     }
@@ -79,7 +80,8 @@ class WidgetController extends Controller
      */
     public function show(Request $request, string $salonSlug): JsonResponse
     {
-        $apiKey = $request->query('key');
+        // FIXED: Standardized to api_key
+        $apiKey = $request->query('api_key') ?? $request->query('key');
 
         if (!$apiKey) {
             return response()->json(['error' => 'API key is required'], 401);
@@ -120,13 +122,13 @@ class WidgetController extends Controller
         }
 
         // Sort services by display_order, staff by display_order
-        // Use whereRaw for PostgreSQL boolean compatibility
+        // FIXED: Use proper boolean comparison with model casts
         $salon = Salon::with(['services' => function($query) {
-            $query->whereRaw('is_active = true')
+            $query->where('is_active', true)
                   ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
-            $query->whereRaw('is_active = true')
+            $query->where('is_active', true)
                   ->orderBy('display_order')
                   ->orderBy('name');
         }])
@@ -200,11 +202,12 @@ class WidgetController extends Controller
      */
     public function availableSlots(Request $request): JsonResponse
     {
-        $apiKey = $request->input('key');
+        // FIXED: Standardized to api_key
+        $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use whereRaw for PostgreSQL boolean compatibility
+        // FIXED: Use proper boolean comparison with model casts
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->whereRaw('is_active = true')
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -262,11 +265,12 @@ class WidgetController extends Controller
      */
     public function availableDates(Request $request): JsonResponse
     {
-        $apiKey = $request->input('key');
+        // FIXED: Standardized to api_key
+        $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use whereRaw for PostgreSQL boolean compatibility
+        // FIXED: Use proper boolean comparison with model casts
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->whereRaw('is_active = true')
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -435,21 +439,23 @@ class WidgetController extends Controller
      */
     public function book(Request $request): JsonResponse
     {
-        $apiKey = $request->input('api_key');
+        // FIXED: Standardized to api_key (with fallback for backward compatibility)
+        $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use whereRaw for PostgreSQL boolean compatibility
+        // FIXED: Use proper boolean comparison with model casts
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->whereRaw('is_active = true')
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
             return response()->json(['error' => 'Invalid API key'], 401);
         }
 
+        // FIXED: Allow null referer (Safari/iOS often don't send it)
         $referer = $request->headers->get('referer');
         $domain = $referer ? parse_url($referer, PHP_URL_HOST) : null;
 
-        if (!$widgetSetting->isDomainAllowed($domain)) {
+        if ($domain && !$widgetSetting->isDomainAllowed($domain)) {
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
                 'error' => 'Domain not allowed',
                 'domain' => $domain,

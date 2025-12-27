@@ -44,9 +44,15 @@ class WidgetSetting extends Model
 
     /**
      * Check if domain is allowed
+     * FIXED: Allow null domain (no referer header)
      */
     public function isDomainAllowed(?string $domain): bool
     {
+        // If no domain provided (no referer), allow it
+        if (empty($domain)) {
+            return true;
+        }
+
         // If no whitelist, allow all
         if (empty($this->allowed_domains)) {
             return true;

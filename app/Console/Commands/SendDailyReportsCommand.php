@@ -51,6 +51,7 @@ class SendDailyReportsCommand extends Command
         $this->info("Generating reports for: {$date->format('d.m.Y')}");
 
         // Get salons with daily reports enabled
+        // FIXED: Use proper boolean comparison instead of whereRaw
         $query = Salon::whereHas('settings', function ($q) {
             $q->where('daily_report_enabled', true);
         })->with(['settings', 'owner']);
