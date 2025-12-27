@@ -68,7 +68,7 @@ confirm "Backup created successfully. Continue?"
 # Step 3: Document pre-migration data
 echo ""
 echo -e "${BLUE}Step 3: Documenting pre-migration data counts${NC}"
-psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "${SCRIPT_DIR}/verify_data_before_migration.sql" > "${SCRIPT_DIR}/pre_migration_counts.txt"
+psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "${SCRIPT_DIR}/verify_data_smart.sql" > "${SCRIPT_DIR}/pre_migration_counts.txt" 2>&1
 echo -e "${GREEN}✅ Pre-migration counts saved to: ${SCRIPT_DIR}/pre_migration_counts.txt${NC}"
 cat "${SCRIPT_DIR}/pre_migration_counts.txt"
 echo ""
@@ -78,7 +78,7 @@ confirm "Data counts documented. Continue with migration?"
 # Step 4: Enable maintenance mode
 echo ""
 echo -e "${BLUE}Step 4: Enabling maintenance mode${NC}"
-php artisan down --message="Database maintenance in progress" --retry=60
+php artisan down
 echo -e "${YELLOW}⚠️  Application is now in maintenance mode${NC}"
 echo ""
 
@@ -104,7 +104,7 @@ echo ""
 # Step 6: Verify data integrity
 echo ""
 echo -e "${BLUE}Step 6: Verifying data integrity${NC}"
-psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "${SCRIPT_DIR}/verify_data_after_migration.sql" > "${SCRIPT_DIR}/post_migration_counts.txt"
+psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "${SCRIPT_DIR}/verify_data_smart.sql" > "${SCRIPT_DIR}/post_migration_counts.txt" 2>&1
 echo -e "${GREEN}✅ Post-migration counts saved to: ${SCRIPT_DIR}/post_migration_counts.txt${NC}"
 cat "${SCRIPT_DIR}/post_migration_counts.txt"
 echo ""
