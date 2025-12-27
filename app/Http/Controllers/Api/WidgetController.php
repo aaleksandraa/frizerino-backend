@@ -122,13 +122,13 @@ class WidgetController extends Controller
         }
 
         // Sort services by display_order, staff by display_order
-        // Laravel boolean cast handles SMALLINT comparison (true = 1)
+        // Use 1 for SMALLINT boolean columns in WHERE clauses
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', true)
+            $query->where('is_active', 1)
                   ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
-            $query->where('is_active', true)
+            $query->where('is_active', 1)
                   ->orderBy('display_order')
                   ->orderBy('name');
         }])
@@ -205,9 +205,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Laravel boolean cast handles SMALLINT comparison (true = 1)
+        // Use 1 for SMALLINT boolean columns in WHERE clauses
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', 1)
             ->first();
 
         if (!$widgetSetting) {
@@ -268,9 +268,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // FIXED: Use proper boolean comparison with model casts
+        // Use 1 for SMALLINT boolean columns in WHERE clauses
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', 1)
             ->first();
 
         if (!$widgetSetting) {
@@ -442,9 +442,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key (with fallback for backward compatibility)
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Laravel boolean cast handles SMALLINT comparison (true = 1)
+        // Use 1 for SMALLINT boolean columns in WHERE clauses
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->where('is_active', 1)
             ->first();
 
         if (!$widgetSetting) {

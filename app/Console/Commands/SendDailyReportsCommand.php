@@ -51,9 +51,9 @@ class SendDailyReportsCommand extends Command
         $this->info("Generating reports for: {$date->format('d.m.Y')}");
 
         // Get salons with daily reports enabled
-        // Laravel boolean cast handles SMALLINT comparison (true = 1)
+        // Use 1 for SMALLINT boolean columns in WHERE clauses
         $query = Salon::whereHas('settings', function ($q) {
-            $q->where('daily_report_enabled', true);
+            $q->where('daily_report_enabled', 1);
         })->with(['settings', 'owner']);
 
         // Filter by specific salon if provided
