@@ -62,15 +62,15 @@ class WidgetController extends Controller
         }
 
         // Create new guest user
-        // FIXED: Boolean cast will handle conversion automatically
+        // Laravel boolean cast auto-converts true to 1 for SMALLINT columns
         return \App\Models\User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
-            'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
+            'password' => bcrypt(\Illuminate\Support\Str::random(32)),
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => true, // Model cast handles boolean conversion
+            'is_guest' => true, // Cast converts to 1 for SMALLINT
             'created_via' => 'widget',
         ]);
     }
@@ -122,7 +122,7 @@ class WidgetController extends Controller
         }
 
         // Sort services by display_order, staff by display_order
-        // FIXED: Use proper boolean comparison with model casts
+        // Laravel boolean cast handles SMALLINT comparison (true = 1)
         $salon = Salon::with(['services' => function($query) {
             $query->where('is_active', true)
                   ->orderBy('display_order')
@@ -205,7 +205,7 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // FIXED: Use proper boolean comparison with model casts
+        // Laravel boolean cast handles SMALLINT comparison (true = 1)
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
             ->where('is_active', true)
             ->first();
@@ -442,7 +442,7 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key (with fallback for backward compatibility)
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // FIXED: Use proper boolean comparison with model casts
+        // Laravel boolean cast handles SMALLINT comparison (true = 1)
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
             ->where('is_active', true)
             ->first();
@@ -574,7 +574,7 @@ class WidgetController extends Controller
                     'client_name' => $request->input('guest_name'),
                     'client_email' => $request->input('guest_email'),
                     'client_phone' => $request->input('guest_phone'),
-                    'is_guest' => true,
+                    'is_guest' => true, // Cast converts to 1 for SMALLINT
                     'guest_address' => $request->input('guest_address'),
                     'notes' => $request->input('notes'),
                     'booking_source' => 'widget',

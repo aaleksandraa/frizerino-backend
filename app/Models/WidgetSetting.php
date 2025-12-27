@@ -22,7 +22,7 @@ class WidgetSetting extends Model
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'is_active' => 'boolean', // Laravel auto-converts SMALLINT 0/1 to boolean
         'allowed_domains' => 'array',
         'theme' => 'array',
         'settings' => 'array',

@@ -47,7 +47,7 @@ class Appointment extends Model
     protected $casts = [
         'date' => 'date',
         'total_price' => 'float',
-        'is_guest' => 'boolean',
+        'is_guest' => 'boolean', // Laravel auto-converts SMALLINT 0/1 to boolean
     ];
 
     /**

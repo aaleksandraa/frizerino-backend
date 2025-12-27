@@ -25,7 +25,7 @@ class SalonSettings extends Model
     ];
 
     protected $casts = [
-        'daily_report_enabled' => 'boolean',
+        'daily_report_enabled' => 'boolean', // Laravel auto-converts SMALLINT 0/1 to boolean
         'daily_report_include_staff' => 'boolean',
         'daily_report_include_services' => 'boolean',
         'daily_report_include_capacity' => 'boolean',
