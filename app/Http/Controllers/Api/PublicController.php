@@ -752,6 +752,93 @@ class PublicController extends Controller
     }
 
     /**
+     * Get available dates for a month (optimized - single API call)
+     * Returns all dates that have at least one available slot
+     */
+    public function availableDatesMonth(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'salon_id' => 'required|exists:salons,id',
+            'staff_id' => 'required|exists:staff,id',
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'], // YYYY-MM format
+            'services' => 'required|array|min:1',
+            'services.*.serviceId' => 'required|exists:services,id',
+            'services.*.staffId' => 'required|exists:staff,id',
+            'services.*.duration' => 'required|integer|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validacija nije uspjela',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $salon = Salon::findOrFail($request->salon_id);
+        $staff = Staff::findOrFail($request->staff_id);
+        $salonService = app(\App\Services\SalonService::class);
+
+        // Parse month
+        $monthStr = $request->month;
+        $year = (int) substr($monthStr, 0, 4);
+        $month = (int) substr($monthStr, 5, 2);
+
+        // Get first and last day of month
+        $firstDay = \Carbon\Carbon::createFromDate($year, $month, 1);
+        $lastDay = $firstDay->copy()->endOfMonth();
+        $today = \Carbon\Carbon::today();
+
+        $availableDates = [];
+        $unavailableDates = [];
+
+        // Check each day in the month
+        for ($day = $firstDay->copy(); $day <= $lastDay; $day->addDay()) {
+            $dateStr = $day->format('d.m.Y');
+            $isoDate = $day->format('Y-m-d');
+
+            // Skip past dates
+            if ($day < $today) {
+                $unavailableDates[] = $isoDate;
+                continue;
+            }
+
+            // Check if salon is open on this day
+            $dayOfWeek = strtolower($day->format('l'));
+            $salonHours = $salon->working_hours[$dayOfWeek] ?? null;
+            if (!$salonHours || !($salonHours['is_open'] ?? false)) {
+                $unavailableDates[] = $isoDate;
+                continue;
+            }
+
+            // Check if staff is working on this day
+            $staffHours = $staff->working_hours[$dayOfWeek] ?? null;
+            if (!$staffHours || !($staffHours['is_working'] ?? false)) {
+                $unavailableDates[] = $isoDate;
+                continue;
+            }
+
+            // Get available slots for this day
+            $slots = $salonService->getAvailableTimeSlotsForMultipleServices(
+                $salon,
+                $dateStr,
+                $request->services
+            );
+
+            if (count($slots) > 0) {
+                $availableDates[] = $dateStr; // Return in DD.MM.YYYY format for frontend
+            } else {
+                $unavailableDates[] = $isoDate;
+            }
+        }
+
+        return response()->json([
+            'available_dates' => $availableDates,
+            'unavailable_dates' => $unavailableDates,
+            'month' => $monthStr,
+        ]);
+    }
+
+    /**
      * Generate sitemap data
      */
     public function sitemap(): JsonResponse

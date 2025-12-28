@@ -108,6 +108,9 @@ Route::prefix('v1')->group(function () {
             // Available time slots for multiple services (public)
             Route::post('/available-slots-multi', [PublicController::class, 'availableSlotsMulti']);
 
+            // Available dates for a month (public - optimized single call)
+            Route::post('/available-dates-month', [PublicController::class, 'availableDatesMonth']);
+
             // Guest booking (no auth required)
             Route::post('/book', [PublicController::class, 'storeGuestAppointment']);
 
