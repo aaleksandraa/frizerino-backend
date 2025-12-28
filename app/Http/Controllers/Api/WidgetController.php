@@ -98,7 +98,8 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Invalid API key - not found'], 401);
         }
 
-        // Check if widget is active
+        // Check if widget is active (works with both SMALLINT and BOOLEAN)
+        // Cast to boolean for consistent comparison
         if (!$widgetByKey->is_active) {
             Log::warning('Widget API: Widget is inactive', [
                 'widget_id' => $widgetByKey->id,
@@ -122,13 +123,13 @@ class WidgetController extends Controller
         }
 
         // Sort services by display_order, staff by display_order
-        // Use 1 for SMALLINT boolean columns in WHERE clauses
+        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', 1)
+            $query->where('is_active', true)
                   ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
-            $query->where('is_active', 1)
+            $query->where('is_active', true)
                   ->orderBy('display_order')
                   ->orderBy('name');
         }])
@@ -205,9 +206,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use 1 for SMALLINT boolean columns in WHERE clauses
+        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', 1)
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -268,9 +269,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use 1 for SMALLINT boolean columns in WHERE clauses
+        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', 1)
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
@@ -442,9 +443,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key (with fallback for backward compatibility)
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use 1 for SMALLINT boolean columns in WHERE clauses
+        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', 1)
+            ->where('is_active', true)
             ->first();
 
         if (!$widgetSetting) {
