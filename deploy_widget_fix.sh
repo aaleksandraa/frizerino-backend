@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Widget Fix - Quick Deployment Script
-# Run on production server: bash deploy_widget_fix.sh
+# Run on production server from backend folder: cd backend && bash deploy_widget_fix.sh
 
 echo "=========================================="
 echo "Widget Fix - Quick Deployment"
@@ -14,9 +14,11 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check if we're in the right directory
+# Check if we're in the backend directory
 if [ ! -f "artisan" ]; then
-    echo -e "${RED}❌ Error: artisan file not found. Are you in the Laravel root directory?${NC}"
+    echo -e "${RED}❌ Error: artisan file not found. Please run from backend directory:${NC}"
+    echo "cd /var/www/vhosts/frizerino.com/api.frizerino.com/backend"
+    echo "bash deploy_widget_fix.sh"
     exit 1
 fi
 
