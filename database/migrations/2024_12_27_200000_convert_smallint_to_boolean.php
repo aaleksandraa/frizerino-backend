@@ -16,104 +16,129 @@ return new class extends Migration
     public function up(): void
     {
         // Users table
-        // Two-step conversion: SMALLINT → INTEGER → BOOLEAN (PostgreSQL requirement)
+        // Step 1: Drop existing default, Step 2: Change type, Step 3: Set new default
+        DB::statement('ALTER TABLE users ALTER COLUMN is_guest DROP DEFAULT');
         DB::statement('ALTER TABLE users ALTER COLUMN is_guest TYPE BOOLEAN USING (is_guest::integer::boolean)');
         DB::statement('ALTER TABLE users ALTER COLUMN is_guest SET DEFAULT false');
         DB::statement('ALTER TABLE users ALTER COLUMN is_guest SET NOT NULL');
 
         // Appointments table
-        // Two-step conversion: SMALLINT → INTEGER → BOOLEAN (PostgreSQL requirement)
+        DB::statement('ALTER TABLE appointments ALTER COLUMN is_guest DROP DEFAULT');
         DB::statement('ALTER TABLE appointments ALTER COLUMN is_guest TYPE BOOLEAN USING (is_guest::integer::boolean)');
         DB::statement('ALTER TABLE appointments ALTER COLUMN is_guest SET DEFAULT false');
         DB::statement('ALTER TABLE appointments ALTER COLUMN is_guest SET NOT NULL');
 
         // Widget Settings table
+        DB::statement('ALTER TABLE widget_settings ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE widget_settings ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE widget_settings ALTER COLUMN is_active SET DEFAULT true');
         DB::statement('ALTER TABLE widget_settings ALTER COLUMN is_active SET NOT NULL');
 
         // Salon Settings table
+        DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_enabled DROP DEFAULT');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_enabled TYPE BOOLEAN USING (daily_report_enabled::integer::boolean)');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_enabled SET DEFAULT false');
 
+        DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_staff DROP DEFAULT');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_staff TYPE BOOLEAN USING (daily_report_include_staff::integer::boolean)');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_staff SET DEFAULT true');
 
+        DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_services DROP DEFAULT');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_services TYPE BOOLEAN USING (daily_report_include_services::integer::boolean)');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_services SET DEFAULT true');
 
+        DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_capacity DROP DEFAULT');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_capacity TYPE BOOLEAN USING (daily_report_include_capacity::integer::boolean)');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_capacity SET DEFAULT true');
 
+        DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_cancellations DROP DEFAULT');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_cancellations TYPE BOOLEAN USING (daily_report_include_cancellations::integer::boolean)');
         DB::statement('ALTER TABLE salon_settings ALTER COLUMN daily_report_include_cancellations SET DEFAULT true');
 
         // Staff table
+        DB::statement('ALTER TABLE staff ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE staff ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE staff ALTER COLUMN is_active SET DEFAULT true');
 
+        DB::statement('ALTER TABLE staff ALTER COLUMN is_public DROP DEFAULT');
         DB::statement('ALTER TABLE staff ALTER COLUMN is_public TYPE BOOLEAN USING (is_public::integer::boolean)');
         DB::statement('ALTER TABLE staff ALTER COLUMN is_public SET DEFAULT true');
 
+        DB::statement('ALTER TABLE staff ALTER COLUMN accepts_bookings DROP DEFAULT');
         DB::statement('ALTER TABLE staff ALTER COLUMN accepts_bookings TYPE BOOLEAN USING (accepts_bookings::integer::boolean)');
         DB::statement('ALTER TABLE staff ALTER COLUMN accepts_bookings SET DEFAULT true');
 
+        DB::statement('ALTER TABLE staff ALTER COLUMN auto_confirm DROP DEFAULT');
         DB::statement('ALTER TABLE staff ALTER COLUMN auto_confirm TYPE BOOLEAN USING (auto_confirm::integer::boolean)');
         DB::statement('ALTER TABLE staff ALTER COLUMN auto_confirm SET DEFAULT false');
 
         // Services table
+        DB::statement('ALTER TABLE services ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE services ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE services ALTER COLUMN is_active SET DEFAULT true');
 
         // Locations table
+        DB::statement('ALTER TABLE locations ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE locations ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE locations ALTER COLUMN is_active SET DEFAULT true');
 
         // Job Ads table
+        DB::statement('ALTER TABLE job_ads ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE job_ads ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE job_ads ALTER COLUMN is_active SET DEFAULT true');
 
         // Homepage Categories table
+        DB::statement('ALTER TABLE homepage_categories ALTER COLUMN is_enabled DROP DEFAULT');
         DB::statement('ALTER TABLE homepage_categories ALTER COLUMN is_enabled TYPE BOOLEAN USING (is_enabled::integer::boolean)');
         DB::statement('ALTER TABLE homepage_categories ALTER COLUMN is_enabled SET DEFAULT true');
 
         // Notifications table
+        DB::statement('ALTER TABLE notifications ALTER COLUMN is_read DROP DEFAULT');
         DB::statement('ALTER TABLE notifications ALTER COLUMN is_read TYPE BOOLEAN USING (is_read::integer::boolean)');
         DB::statement('ALTER TABLE notifications ALTER COLUMN is_read SET DEFAULT false');
 
         // Reviews table
+        DB::statement('ALTER TABLE reviews ALTER COLUMN is_verified DROP DEFAULT');
         DB::statement('ALTER TABLE reviews ALTER COLUMN is_verified TYPE BOOLEAN USING (is_verified::integer::boolean)');
         DB::statement('ALTER TABLE reviews ALTER COLUMN is_verified SET DEFAULT false');
 
         // Staff Portfolio table
+        DB::statement('ALTER TABLE staff_portfolio ALTER COLUMN is_featured DROP DEFAULT');
         DB::statement('ALTER TABLE staff_portfolio ALTER COLUMN is_featured TYPE BOOLEAN USING (is_featured::integer::boolean)');
         DB::statement('ALTER TABLE staff_portfolio ALTER COLUMN is_featured SET DEFAULT false');
 
         // User Consents table
+        DB::statement('ALTER TABLE user_consents ALTER COLUMN accepted DROP DEFAULT');
         DB::statement('ALTER TABLE user_consents ALTER COLUMN accepted TYPE BOOLEAN USING (accepted::integer::boolean)');
         DB::statement('ALTER TABLE user_consents ALTER COLUMN accepted SET DEFAULT false');
 
         // Service Images table
+        DB::statement('ALTER TABLE service_images ALTER COLUMN is_featured DROP DEFAULT');
         DB::statement('ALTER TABLE service_images ALTER COLUMN is_featured TYPE BOOLEAN USING (is_featured::integer::boolean)');
         DB::statement('ALTER TABLE service_images ALTER COLUMN is_featured SET DEFAULT false');
 
         // Salon Images table
+        DB::statement('ALTER TABLE salon_images ALTER COLUMN is_primary DROP DEFAULT');
         DB::statement('ALTER TABLE salon_images ALTER COLUMN is_primary TYPE BOOLEAN USING (is_primary::integer::boolean)');
         DB::statement('ALTER TABLE salon_images ALTER COLUMN is_primary SET DEFAULT false');
 
         // Staff Breaks table
+        DB::statement('ALTER TABLE staff_breaks ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE staff_breaks ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE staff_breaks ALTER COLUMN is_active SET DEFAULT true');
 
         // Staff Vacations table
+        DB::statement('ALTER TABLE staff_vacations ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE staff_vacations ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE staff_vacations ALTER COLUMN is_active SET DEFAULT true');
 
         // Salon Breaks table
+        DB::statement('ALTER TABLE salon_breaks ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE salon_breaks ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE salon_breaks ALTER COLUMN is_active SET DEFAULT true');
 
         // Salon Vacations table
+        DB::statement('ALTER TABLE salon_vacations ALTER COLUMN is_active DROP DEFAULT');
         DB::statement('ALTER TABLE salon_vacations ALTER COLUMN is_active TYPE BOOLEAN USING (is_active::integer::boolean)');
         DB::statement('ALTER TABLE salon_vacations ALTER COLUMN is_active SET DEFAULT true');
     }
