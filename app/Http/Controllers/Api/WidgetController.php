@@ -98,8 +98,7 @@ class WidgetController extends Controller
             return response()->json(['error' => 'Invalid API key - not found'], 401);
         }
 
-        // Check if widget is active (works with both SMALLINT and BOOLEAN)
-        // Cast to boolean for consistent comparison
+        // Check if widget is active
         if (!$widgetByKey->is_active) {
             Log::warning('Widget API: Widget is inactive', [
                 'widget_id' => $widgetByKey->id,
