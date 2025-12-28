@@ -167,9 +167,9 @@ class WidgetController extends Controller
                     'id' => $service->id,
                     'name' => $service->name,
                     'description' => $service->description,
-                    'price' => $service->price,
-                    'discount_price' => $service->discount_price,
-                    'duration' => $service->duration,
+                    'price' => (float) $service->price,
+                    'discount_price' => $service->discount_price ? (float) $service->discount_price : null,
+                    'duration' => (int) $service->duration, // Ensure integer for frontend validation
                     'category' => $service->category,
                     'display_order' => $service->display_order,
                     'staff_ids' => $service->staff_ids,
