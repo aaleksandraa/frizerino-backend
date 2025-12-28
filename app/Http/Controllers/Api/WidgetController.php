@@ -122,13 +122,13 @@ class WidgetController extends Controller
         }
 
         // Sort services by display_order, staff by display_order
-        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
+        // FIXED: Use whereRaw for BOOLEAN columns (PostgreSQL strict typing)
         $salon = Salon::with(['services' => function($query) {
-            $query->where('is_active', true)
+            $query->whereRaw('is_active = true')
                   ->orderBy('display_order')
                   ->orderBy('id');
         }, 'staff' => function($query) {
-            $query->where('is_active', true)
+            $query->whereRaw('is_active = true')
                   ->orderBy('display_order')
                   ->orderBy('name');
         }])
@@ -205,9 +205,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
+        // FIXED: Use whereRaw for BOOLEAN columns (PostgreSQL strict typing)
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -268,9 +268,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
+        // FIXED: Use whereRaw for BOOLEAN columns (PostgreSQL strict typing)
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -442,9 +442,9 @@ class WidgetController extends Controller
         // FIXED: Standardized to api_key (with fallback for backward compatibility)
         $apiKey = $request->input('api_key') ?? $request->input('key');
 
-        // Use Laravel's boolean cast - works with both SMALLINT and BOOLEAN
+        // FIXED: Use whereRaw for BOOLEAN columns (PostgreSQL strict typing)
         $widgetSetting = WidgetSetting::where('api_key', $apiKey)
-            ->where('is_active', true)
+            ->whereRaw('is_active = true')
             ->first();
 
         if (!$widgetSetting) {
@@ -506,11 +506,35 @@ class WidgetController extends Controller
                 ? array_column($request->input('services'), 'id')
                 : [$request->input('service_id')];
 
-            // Calculate total duration for all services
+            // VALIDATION: Check for zero duration services
+            $zeroServices = [];
             $totalDuration = 0;
             foreach ($serviceIds as $serviceId) {
                 $service = Service::findOrFail($serviceId);
+
+                if ($service->duration == 0) {
+                    $zeroServices[] = $service->name;
+                }
+
                 $totalDuration += $service->duration;
+            }
+
+            // Prevent booking if ALL services have zero duration
+            if ($totalDuration == 0) {
+                return response()->json([
+                    'error' => 'Ne možete rezervisati usluge koje nemaju trajanje. Molimo odaberite drugu uslugu ili kontaktirajte salon.',
+                    'code' => 'ZERO_DURATION_SERVICE',
+                    'services' => $zeroServices
+                ], 422);
+            }
+
+            // Warn if some services have zero duration (but allow if total > 0)
+            if (!empty($zeroServices)) {
+                Log::warning('Widget booking with zero duration services', [
+                    'services' => $zeroServices,
+                    'total_duration' => $totalDuration,
+                    'salon_id' => $request->input('salon_id'),
+                ]);
             }
 
             // Calculate end time for all services combined

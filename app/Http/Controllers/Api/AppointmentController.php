@@ -176,6 +176,15 @@ class AppointmentController extends Controller
                 $service = Service::findOrFail($request->service_id);
                 $salon = Salon::findOrFail($request->salon_id);
 
+                // VALIDATION: Prevent booking services with zero duration
+                if ($service->duration == 0) {
+                    return response()->json([
+                        'message' => 'Ne možete rezervisati uslugu koja nema trajanje. Molimo odaberite drugu uslugu ili kontaktirajte salon.',
+                        'code' => 'ZERO_DURATION_SERVICE',
+                        'service' => $service->name
+                    ], 422);
+                }
+
                 // Check if the staff can perform this service
                 if (!$staff->services->contains($service->id)) {
                     return response()->json([
