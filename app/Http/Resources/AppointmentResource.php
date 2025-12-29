@@ -14,6 +14,10 @@ class AppointmentResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Get services - either single service or multiple services
+        $services = $this->services();
+        $isMultiService = $this->isMultiService();
+
         return [
             'id' => $this->id,
             'client_id' => $this->client_id,
@@ -24,7 +28,19 @@ class AppointmentResource extends JsonResource
             'staff_id' => $this->staff_id,
             'staff_name' => $this->staff?->name,
             'service_id' => $this->service_id,
-            'service_name' => $this->service?->name,
+            'service_ids' => $this->service_ids,
+            'is_multi_service' => $isMultiService,
+            'service_name' => $isMultiService
+                ? $services->pluck('name')->join(', ')
+                : ($this->service?->name ?? $services->first()?->name),
+            'services' => $services->map(function($service) {
+                return [
+                    'id' => $service->id,
+                    'name' => $service->name,
+                    'duration' => $service->duration,
+                    'price' => $service->price,
+                ];
+            })->toArray(),
             'date' => $this->date->format('d.m.Y'),
             'time' => $this->time,
             'end_time' => $this->end_time,
@@ -49,7 +65,7 @@ class AppointmentResource extends JsonResource
                     'role' => $this->staff->role,
                 ];
             }),
-            'service' => $this->when($this->relationLoaded('service'), function () {
+            'service' => $this->when($this->relationLoaded('service') && $this->service, function () {
                 return [
                     'id' => $this->service->id,
                     'name' => $this->service->name,
