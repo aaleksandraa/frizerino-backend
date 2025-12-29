@@ -56,22 +56,22 @@
                                         <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
                                             <tr>
                                                 <td style="width: 100px; color: #6b7280; font-size: 14px; vertical-align: top;">
-                                                    @if($appointments && count($appointments) > 1)
+                                                    @if($appointment->isMultiService())
                                                     Usluge
                                                     @else
                                                     Usluga
                                                     @endif
                                                 </td>
                                                 <td style="color: #111827; font-size: 15px;">
-                                                    @if($appointments && count($appointments) > 1)
-                                                        @foreach($appointments as $apt)
+                                                    @if($appointment->isMultiService())
+                                                        @foreach($appointment->services() as $service)
                                                         <div style="margin-bottom: 8px;">
-                                                            <span style="font-weight: 600;">{{ $apt->service->name }}</span>
-                                                            @if($apt->service->duration > 0)
-                                                            <span style="color: #6b7280; font-size: 13px;">({{ $apt->service->duration }} min)</span>
+                                                            <span style="font-weight: 600;">{{ $service->name }}</span>
+                                                            @if($service->duration > 0)
+                                                            <span style="color: #6b7280; font-size: 13px;">({{ $service->duration }} min)</span>
                                                             @endif
-                                                            @if($apt->total_price)
-                                                            <span style="color: #f97316; margin-left: 8px;">{{ number_format($apt->total_price, 2) }} KM</span>
+                                                            @if($service->price)
+                                                            <span style="color: #f97316; margin-left: 8px;">{{ number_format($service->discount_price ?? $service->price, 2) }} KM</span>
                                                             @endif
                                                         </div>
                                                         @endforeach

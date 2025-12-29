@@ -27,6 +27,7 @@ class Appointment extends Model
         'salon_id',
         'staff_id',
         'service_id',
+        'service_ids', // For multi-service appointments
         'date',
         'time',
         'end_time',
@@ -47,7 +48,8 @@ class Appointment extends Model
     protected $casts = [
         'date' => 'date',
         'total_price' => 'float',
-        'is_guest' => 'boolean', // Laravel auto-converts SMALLINT 0/1 to boolean
+        'is_guest' => 'boolean',
+        'service_ids' => 'array', // Cast JSON to array
     ];
 
     /**
@@ -80,6 +82,32 @@ class Appointment extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
+    }
+
+    /**
+     * Get all services for this appointment (for multi-service appointments).
+     * Returns collection of Service models.
+     */
+    public function services()
+    {
+        if ($this->service_ids && is_array($this->service_ids)) {
+            return Service::whereIn('id', $this->service_ids)->get();
+        }
+
+        // Fallback to single service
+        if ($this->service_id) {
+            return collect([$this->service]);
+        }
+
+        return collect([]);
+    }
+
+    /**
+     * Check if this is a multi-service appointment.
+     */
+    public function isMultiService(): bool
+    {
+        return !empty($this->service_ids) && count($this->service_ids) > 1;
     }
 
     /**

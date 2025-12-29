@@ -46,7 +46,6 @@ class NotificationService
         $formattedDate = $this->formatDate($appointment->date);
         $formattedTime = $this->formatTime($appointment->time);
         $salon = $appointment->salon;
-        $service = $appointment->service;
         $client = $appointment->client;
         $staff = $appointment->staff;
 
@@ -54,13 +53,26 @@ class NotificationService
         $clientName = $client ? $client->name : ($appointment->client_name ?? 'Gost');
         $isGuest = $appointment->is_guest || !$client;
 
+        // Build service list
+        $services = $appointment->services();
+        if ($services->count() > 1) {
+            $serviceNames = $services->pluck('name')->toArray();
+            $serviceList = count($serviceNames) > 1
+                ? implode(', ', array_slice($serviceNames, 0, -1)) . ' i ' . end($serviceNames)
+                : $serviceNames[0];
+        } else {
+            $serviceList = $appointment->service ? $appointment->service->name : 'Usluga';
+        }
+
         // Notify salon owner
         $owner = $salon->owner;
         $guestLabel = $isGuest ? ' (ručno dodano)' : '';
         Notification::create([
             'type' => 'new_appointment',
             'title' => 'Novi termin',
-            'message' => "{$clientName}{$guestLabel} je zakazao/la termin za uslugu '{$service->name}' kod {$staff->name} za {$formattedDate} u {$formattedTime}h",
+            'message' => "{$clientName}{$guestLabel} je zakazao/la termin za " .
+                ($services->count() > 1 ? "usluge: {$serviceList}" : "uslugu '{$serviceList}'") .
+                " kod {$staff->name} za {$formattedDate} u {$formattedTime}h",
             'recipient_id' => $owner->id,
             'related_id' => $appointment->id,
         ]);
@@ -79,7 +91,9 @@ class NotificationService
             Notification::create([
                 'type' => 'new_appointment',
                 'title' => 'Novi termin',
-                'message' => "{$clientName}{$guestLabel} je zakazao/la termin za uslugu '{$service->name}' za {$formattedDate} u {$formattedTime}h",
+                'message' => "{$clientName}{$guestLabel} je zakazao/la termin za " .
+                    ($services->count() > 1 ? "usluge: {$serviceList}" : "uslugu '{$serviceList}'") .
+                    " za {$formattedDate} u {$formattedTime}h",
                 'recipient_id' => $staff->user_id,
                 'related_id' => $appointment->id,
             ]);
@@ -104,7 +118,9 @@ class NotificationService
             Notification::create([
                 'type' => $appointment->status === 'confirmed' ? 'appointment_confirmed' : 'new_appointment',
                 'title' => $appointment->status === 'confirmed' ? 'Termin potvrđen' : 'Termin zakazan',
-                'message' => "Vaš termin za '{$service->name}' kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h {$statusMessage}",
+                'message' => "Vaš termin za " .
+                    ($services->count() > 1 ? "usluge: {$serviceList}" : "'{$serviceList}'") .
+                    " kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h {$statusMessage}",
                 'recipient_id' => $appointment->client_id,
                 'related_id' => $appointment->id,
             ]);

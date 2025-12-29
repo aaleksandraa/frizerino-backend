@@ -499,6 +499,7 @@ class WidgetController extends Controller
 
         try {
             $salon = Salon::findOrFail($request->input('salon_id'));
+            $staff = Staff::findOrFail($request->input('staff_id'));
             $dateForDb = Carbon::createFromFormat('d.m.Y', $request->input('date'))->format('Y-m-d');
             $startTime = $request->input('time');
 
@@ -506,17 +507,18 @@ class WidgetController extends Controller
                 ? array_column($request->input('services'), 'id')
                 : [$request->input('service_id')];
 
-            // VALIDATION: Check for zero duration services
+            // Load all services and calculate total duration and price
+            $services = Service::whereIn('id', $serviceIds)->get();
             $zeroServices = [];
             $totalDuration = 0;
-            foreach ($serviceIds as $serviceId) {
-                $service = Service::findOrFail($serviceId);
+            $totalPrice = 0;
 
+            foreach ($services as $service) {
                 if ($service->duration == 0) {
                     $zeroServices[] = $service->name;
                 }
-
                 $totalDuration += $service->duration;
+                $totalPrice += $service->discount_price ?? $service->price;
             }
 
             // Prevent booking if ALL services have zero duration
@@ -537,21 +539,20 @@ class WidgetController extends Controller
                 ]);
             }
 
-            // Calculate end time for all services combined
+            // Calculate end time based on total duration (excluding 0-duration services)
             $startParts = explode(':', $startTime);
             $startMinutes = (int)$startParts[0] * 60 + (int)$startParts[1];
-            $totalEndMinutes = $startMinutes + $totalDuration;
-            $totalEndTime = sprintf('%02d:%02d', floor($totalEndMinutes / 60), $totalEndMinutes % 60);
+            $endMinutes = $startMinutes + $totalDuration;
+            $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
 
             // CRITICAL: Check for overlapping appointments BEFORE creating
-            // Use whereDate for consistent date comparison
             $overlappingAppointment = Appointment::where('staff_id', $request->input('staff_id'))
                 ->whereDate('date', $dateForDb)
                 ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
-                ->where(function($query) use ($startTime, $totalEndTime) {
+                ->where(function($query) use ($startTime, $endTime) {
                     // Check if new appointment overlaps with any existing appointment
                     // Overlap occurs when: new_start < existing_end AND new_end > existing_start
-                    $query->whereRaw("? < end_time AND ? > time", [$startTime, $totalEndTime]);
+                    $query->whereRaw("? < end_time AND ? > time", [$startTime, $endTime]);
                 })
                 ->first();
 
@@ -563,9 +564,6 @@ class WidgetController extends Controller
                 ], 409); // 409 Conflict
             }
 
-            $appointments = [];
-            $currentTime = $startTime;
-            $totalPrice = 0;
             $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
 
             // Find or create guest user if email provided
@@ -578,76 +576,55 @@ class WidgetController extends Controller
                 ]);
             }
 
-            foreach ($serviceIds as $serviceId) {
-                $service = Service::findOrFail($serviceId);
+            // Create ONE appointment with all services
+            $appointment = Appointment::create([
+                'client_id' => $guestUser?->id,
+                'salon_id' => $request->input('salon_id'),
+                'staff_id' => $request->input('staff_id'),
+                'service_id' => count($serviceIds) === 1 ? $serviceIds[0] : null, // For backward compatibility
+                'service_ids' => $serviceIds, // Store all service IDs
+                'date' => $dateForDb,
+                'time' => $startTime,
+                'end_time' => $endTime,
+                'status' => $initialStatus,
+                'client_name' => $request->input('guest_name'),
+                'client_email' => $request->input('guest_email'),
+                'client_phone' => $request->input('guest_phone'),
+                'is_guest' => \Illuminate\Support\Facades\DB::raw('true'),
+                'guest_address' => $request->input('guest_address'),
+                'notes' => $request->input('notes'),
+                'booking_source' => 'widget',
+                'total_price' => $totalPrice,
+                'payment_status' => 'pending',
+            ]);
 
-                // For 0-duration services (add-ons), use the same time as current appointment
-                // but don't advance the currentTime (they don't take up time slots)
-                $timeParts = explode(':', $currentTime);
-                $currentMinutes = (int)$timeParts[0] * 60 + (int)$timeParts[1];
-                $endMinutes = $currentMinutes + $service->duration;
-                $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
+            // Send notification (single appointment with multiple services)
+            $this->notificationService->sendNewAppointmentNotifications($appointment);
 
-                $appointment = Appointment::create([
-                    'client_id' => $guestUser?->id, // Link to guest user if email provided
-                    'salon_id' => $request->input('salon_id'),
-                    'service_id' => $serviceId,
-                    'staff_id' => $request->input('staff_id'),
-                    'date' => $dateForDb,
-                    'time' => $currentTime,
-                    'end_time' => $endTime,
-                    'status' => $initialStatus,
-                    'client_name' => $request->input('guest_name'),
-                    'client_email' => $request->input('guest_email'),
-                    'client_phone' => $request->input('guest_phone'),
-                    'is_guest' => \Illuminate\Support\Facades\DB::raw('true'),
-                    'guest_address' => $request->input('guest_address'),
-                    'notes' => $request->input('notes'),
-                    'booking_source' => 'widget',
-                    'total_price' => $service->discount_price ?? $service->price,
-                    'payment_status' => 'pending',
-                ]);
-
-                $appointments[] = $appointment;
-                $totalPrice += $service->discount_price ?? $service->price;
-
-                // Only advance time for services with duration > 0
-                // 0-duration services are add-ons that don't take up time slots
-                if ($service->duration > 0) {
-                    $currentTime = $endTime;
-                }
-            }
-
-            // Send grouped notification for all appointments (instead of one per service)
-            if (count($appointments) > 0) {
-                $this->notificationService->sendMultiServiceAppointmentNotifications($appointments);
-            }
-
+            // Send confirmation email
             $guestEmail = $request->input('guest_email');
-            if ($guestEmail && count($appointments) > 0) {
+            if ($guestEmail) {
                 try {
-                    // Send grouped email with all appointments
-                    Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointments[0], $appointments));
+                    Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointment));
                 } catch (\Exception $e) {
                     Log::warning('Widget: Failed to send confirmation email: ' . $e->getMessage());
                 }
             }
 
             $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_BOOKING, $request, [
-                'appointment_ids' => array_map(fn($a) => $a->id, $appointments),
+                'appointment_id' => $appointment->id,
                 'service_ids' => $serviceIds,
                 'staff_id' => $request->input('staff_id'),
                 'total_price' => $totalPrice,
             ], $widgetSetting->id);
 
-            $widgetSetting->increment('total_bookings', count($appointments));
+            $widgetSetting->increment('total_bookings');
 
             return response()->json([
                 'success' => true,
                 'message' => 'Rezervacija uspješno kreirana',
-                'appointments' => array_map(function($apt) {
-                    return [
-                        'id' => $apt->id,
+                'appointment' => [
+                    'id' => $appointment->id,
                         'date' => Carbon::parse($apt->date)->format('d.m.Y'),
                         'time' => $apt->time,
                         'status' => $apt->status,

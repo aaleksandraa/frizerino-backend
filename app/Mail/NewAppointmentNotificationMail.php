@@ -16,7 +16,6 @@ class NewAppointmentNotificationMail extends Mailable implements ShouldQueue
     use Queueable, SerializesModels;
 
     public Appointment $appointment;
-    public ?array $appointments; // For multi-service bookings
     public string $recipientType; // 'salon' or 'staff'
     public string $formattedDate;
     public string $formattedTime;
@@ -27,20 +26,17 @@ class NewAppointmentNotificationMail extends Mailable implements ShouldQueue
     /**
      * Create a new message instance.
      */
-    public function __construct(Appointment $appointment, string $recipientType = 'salon', ?array $appointments = null)
+    public function __construct(Appointment $appointment, string $recipientType = 'salon')
     {
         $this->appointment = $appointment->load(['salon', 'service', 'staff', 'client']);
         $this->recipientType = $recipientType;
-        $this->appointments = $appointments;
 
-        // If multiple appointments provided, calculate total duration and price
-        if ($appointments && count($appointments) > 1) {
-            $this->totalDuration = array_sum(array_map(fn($apt) => $apt->service->duration, $appointments));
-            $this->totalPrice = array_sum(array_map(fn($apt) => $apt->total_price, $appointments));
-        } else {
-            $this->totalDuration = $appointment->service->duration ?? 60;
-            $this->totalPrice = $appointment->total_price;
-        }
+        // Get all services for this appointment
+        $services = $appointment->services();
+
+        // Calculate total duration and price
+        $this->totalDuration = $services->sum('duration');
+        $this->totalPrice = $appointment->total_price;
 
         // Parse date and time
         $dateString = $appointment->date instanceof Carbon

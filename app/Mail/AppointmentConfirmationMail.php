@@ -16,7 +16,6 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
     use Queueable, SerializesModels;
 
     public Appointment $appointment;
-    public ?array $appointments; // For multi-service bookings
     public string $googleCalendarUrl;
     public string $icsContent;
     public string $formattedDate;
@@ -28,19 +27,16 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
     /**
      * Create a new message instance.
      */
-    public function __construct(Appointment $appointment, ?array $appointments = null)
+    public function __construct(Appointment $appointment)
     {
         $this->appointment = $appointment->load(['salon', 'service', 'staff']);
-        $this->appointments = $appointments;
 
-        // If multiple appointments provided, calculate total duration and price
-        if ($appointments && count($appointments) > 1) {
-            $this->totalDuration = array_sum(array_map(fn($apt) => $apt->service->duration, $appointments));
-            $this->totalPrice = array_sum(array_map(fn($apt) => $apt->total_price, $appointments));
-        } else {
-            $this->totalDuration = $appointment->service->duration ?? 60;
-            $this->totalPrice = $appointment->total_price;
-        }
+        // Get all services for this appointment
+        $services = $appointment->services();
+
+        // Calculate total duration and price
+        $this->totalDuration = $services->sum('duration');
+        $this->totalPrice = $appointment->total_price;
 
         // Parse date and time - date is already Carbon instance from model cast
         $dateString = $appointment->date instanceof Carbon
@@ -67,8 +63,9 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
         $staff = $this->appointment->staff;
 
         // Build service list
-        if ($this->appointments && count($this->appointments) > 1) {
-            $serviceNames = array_map(fn($apt) => $apt->service->name, $this->appointments);
+        $services = $this->appointment->services();
+        if ($services->count() > 1) {
+            $serviceNames = $services->pluck('name')->toArray();
             $serviceList = implode(', ', $serviceNames);
             $title = urlencode("Termin: {$serviceList} - {$salon->name}");
             $details = urlencode("Usluge: {$serviceList}\nSalon: {$salon->name}" .
@@ -104,8 +101,9 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
         $staff = $this->appointment->staff;
 
         // Build service list
-        if ($this->appointments && count($this->appointments) > 1) {
-            $serviceNames = array_map(fn($apt) => $apt->service->name, $this->appointments);
+        $services = $this->appointment->services();
+        if ($services->count() > 1) {
+            $serviceNames = $services->pluck('name')->toArray();
             $serviceList = implode(', ', $serviceNames);
             $summary = "Termin: {$serviceList} - {$salon->name}";
             $description = "Usluge: {$serviceList}\\nSalon: {$salon->name}" .
