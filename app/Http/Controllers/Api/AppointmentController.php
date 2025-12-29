@@ -77,7 +77,7 @@ class AppointmentController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => DB::raw('true'),
+            'is_guest' => 1, // Cast to integer for PostgreSQL smallint compatibility
             'created_via' => 'booking',
         ]);
     }
@@ -267,7 +267,7 @@ class AppointmentController extends Controller
                     'client_name' => $clientName,
                     'client_email' => $clientEmail,
                     'client_phone' => $clientPhone,
-                    'is_guest' => $isGuest ? DB::raw('true') : DB::raw('false'),
+                    'is_guest' => $isGuest ? 1 : 0, // Cast to integer for PostgreSQL smallint compatibility
                     'guest_address' => $guestAddress,
                     'salon_id' => $salon->id,
                     'staff_id' => $staff->id,

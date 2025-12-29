@@ -78,7 +78,7 @@ class PublicController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => DB::raw('true'),
+            'is_guest' => 1, // Cast to integer for PostgreSQL smallint compatibility
             'created_via' => 'booking',
         ]);
     }
@@ -605,7 +605,7 @@ class PublicController extends Controller
                     'client_name' => $request->guest_name,
                     'client_email' => $request->guest_email,
                     'client_phone' => $request->guest_phone,
-                    'is_guest' => DB::raw('true'),
+                    'is_guest' => 1, // Cast to integer for PostgreSQL smallint compatibility
                     'guest_address' => $request->guest_address,
                     'salon_id' => $salon->id,
                     'staff_id' => $staff->id,

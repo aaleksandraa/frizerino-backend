@@ -348,7 +348,7 @@ class ImportService
             'password' => bcrypt(Str::random(32)), // Random password for guest users
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => DB::raw('true'),
+            'is_guest' => 1, // Cast to integer for PostgreSQL smallint compatibility
             'created_via' => 'import',
         ]);
     }

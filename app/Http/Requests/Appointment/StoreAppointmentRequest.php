@@ -24,7 +24,10 @@ class StoreAppointmentRequest extends BaseRequest
         $rules = [
             'salon_id' => 'required|exists:salons,id',
             'staff_id' => 'required|exists:staff,id',
-            'service_id' => 'required|exists:services,id',
+            // Accept EITHER service_id (single) OR services array (multiple)
+            'service_id' => 'required_without:services|exists:services,id',
+            'services' => 'required_without:service_id|array|min:1',
+            'services.*.id' => 'required_with:services|exists:services,id',
             'date' => 'required|date_format:d.m.Y|after_or_equal:today',
             'time' => 'required|date_format:H:i',
             'notes' => 'nullable|string',

@@ -70,7 +70,7 @@ class WidgetController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)),
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => \Illuminate\Support\Facades\DB::raw('true'),
+            'is_guest' => 1, // Cast to integer for PostgreSQL smallint compatibility
             'created_via' => 'widget',
         ]);
     }
@@ -590,7 +590,7 @@ class WidgetController extends Controller
                 'client_name' => $request->input('guest_name'),
                 'client_email' => $request->input('guest_email'),
                 'client_phone' => $request->input('guest_phone'),
-                'is_guest' => \Illuminate\Support\Facades\DB::raw('true'),
+                'is_guest' => 1, // Cast to integer for PostgreSQL smallint compatibility
                 'guest_address' => $request->input('guest_address'),
                 'notes' => $request->input('notes'),
                 'booking_source' => 'widget',
