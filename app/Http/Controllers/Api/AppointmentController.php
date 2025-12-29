@@ -166,58 +166,77 @@ class AppointmentController extends Controller
         try {
             return DB::transaction(function () use ($request, $user, $isManualBooking) {
                 // Lock the staff row to prevent concurrent booking
-                // This ensures that only one transaction can check availability and create
-                // an appointment for this staff member at a time
                 $staff = Staff::where('id', $request->staff_id)
                     ->with(['breaks', 'vacations', 'salon.salonBreaks', 'salon.salonVacations', 'services'])
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                $service = Service::findOrFail($request->service_id);
                 $salon = Salon::findOrFail($request->salon_id);
 
-                // VALIDATION: Prevent booking services with zero duration
-                if ($service->duration == 0) {
+                // Handle multi-service appointments
+                $serviceIds = [];
+                if ($request->has('services') && is_array($request->services)) {
+                    // Multi-service booking
+                    $serviceIds = array_column($request->services, 'id');
+                } elseif ($request->has('service_id')) {
+                    // Single service booking
+                    $serviceIds = [$request->service_id];
+                } else {
                     return response()->json([
-                        'message' => 'Ne možete rezervisati uslugu koja nema trajanje. Molimo odaberite drugu uslugu ili kontaktirajte salon.',
-                        'code' => 'ZERO_DURATION_SERVICE',
-                        'service' => $service->name
+                        'message' => 'Service ID or services array is required',
                     ], 422);
                 }
 
-                // Check if the staff can perform this service
-                if (!$staff->services->contains($service->id)) {
+                // Load all services and calculate total duration
+                $services = Service::whereIn('id', $serviceIds)->get();
+                $totalDuration = 0;
+                $totalPrice = 0;
+                $zeroServices = [];
+
+                foreach ($services as $service) {
+                    if ($service->duration == 0) {
+                        $zeroServices[] = $service->name;
+                    }
+                    $totalDuration += $service->duration;
+                    $totalPrice += $service->discount_price ?? $service->price;
+
+                    // Check if staff can perform this service
+                    if (!$staff->services->contains($service->id)) {
+                        return response()->json([
+                            'message' => "The selected staff cannot perform service: {$service->name}",
+                        ], 422);
+                    }
+                }
+
+                // VALIDATION: Prevent booking if ALL services have zero duration
+                if ($totalDuration == 0) {
                     return response()->json([
-                        'message' => 'The selected staff cannot perform this service',
+                        'message' => 'Ne možete rezervisati usluge koje nemaju trajanje. Molimo odaberite drugu uslugu.',
+                        'code' => 'ZERO_DURATION_SERVICE',
+                        'services' => $zeroServices
                     ], 422);
                 }
 
                 // Check if the staff is available at the requested time
-                // This check is now protected by the row lock
-                if (!$this->appointmentService->isStaffAvailable($staff, $request->date, $request->time, $service->duration)) {
+                if (!$this->appointmentService->isStaffAvailable($staff, $request->date, $request->time, $totalDuration)) {
                     return response()->json([
                         'message' => 'The selected staff is not available at the requested time',
                     ], 422);
                 }
 
-                // Calculate end time
-                $endTime = $this->appointmentService->calculateEndTime($request->time, $service->duration);
+                // Calculate end time based on total duration
+                $endTime = $this->appointmentService->calculateEndTime($request->time, $totalDuration);
 
                 // For manual bookings, auto-confirm the appointment
-                // For client bookings, check salon's auto_confirm setting
                 $initialStatus = $isManualBooking
                     ? 'confirmed'
                     : (($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending');
 
-                // Use discount price if available, otherwise use regular price
-                $finalPrice = $service->discount_price ?? $service->price;
-
-                // Convert European date format (DD.MM.YYYY) to ISO format (YYYY-MM-DD) for database
+                // Convert European date format to ISO format for database
                 $dateForDb = Carbon::createFromFormat('d.m.Y', $request->date)->format('Y-m-d');
 
                 // Determine client info based on booking type
                 if ($isManualBooking) {
-                    // Manual booking by salon/frizer - find or create guest user if email provided
                     $guestUser = null;
                     if (!empty($request->client_email)) {
                         $guestUser = $this->findOrCreateGuestUser([
@@ -234,7 +253,6 @@ class AppointmentController extends Controller
                     $isGuest = true;
                     $guestAddress = $request->client_address;
                 } else {
-                    // Client booking themselves
                     $clientId = $user->id;
                     $clientName = $user->name;
                     $clientEmail = $user->email;
@@ -243,6 +261,7 @@ class AppointmentController extends Controller
                     $guestAddress = null;
                 }
 
+                // Create ONE appointment with all services
                 $appointment = Appointment::create([
                     'client_id' => $clientId,
                     'client_name' => $clientName,
@@ -252,13 +271,14 @@ class AppointmentController extends Controller
                     'guest_address' => $guestAddress,
                     'salon_id' => $salon->id,
                     'staff_id' => $staff->id,
-                    'service_id' => $service->id,
+                    'service_id' => count($serviceIds) === 1 ? $serviceIds[0] : null, // For backward compatibility
+                    'service_ids' => $serviceIds, // Store all service IDs
                     'date' => $dateForDb,
                     'time' => $request->time,
                     'end_time' => $endTime,
                     'status' => $initialStatus,
                     'notes' => $request->notes,
-                    'total_price' => $finalPrice,
+                    'total_price' => $totalPrice,
                     'payment_status' => 'pending',
                 ]);
 
@@ -276,8 +296,6 @@ class AppointmentController extends Controller
                 ], 201);
             });
         } catch (QueryException $e) {
-            // Check if this is a unique constraint violation (double booking attempt)
-            // PostgreSQL error code for unique violation is 23505
             if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'appointments_no_double_booking')) {
                 Log::warning('Double booking attempt prevented', [
                     'user_id' => $user->id,
@@ -291,7 +309,6 @@ class AppointmentController extends Controller
                 ], 422);
             }
 
-            // Re-throw other database errors
             throw $e;
         }
     }
