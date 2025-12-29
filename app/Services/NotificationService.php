@@ -363,10 +363,12 @@ class NotificationService
 
     /**
      * Send reminder notification for upcoming appointment.
+     * For registered users: creates in-app notification
+     * For guest bookings: only sends email (no in-app notification)
      */
     public function sendAppointmentReminderNotification(Appointment $appointment): void
     {
-        $appointment->load(['salon', 'staff', 'service']);
+        $appointment->load(['salon', 'staff', 'service', 'client']);
 
         $formattedDate = $this->formatDate($appointment->date);
         $formattedTime = $this->formatTime($appointment->time);
@@ -374,13 +376,26 @@ class NotificationService
         $service = $appointment->service;
         $staff = $appointment->staff;
 
-        Notification::create([
-            'type' => 'appointment_reminder',
-            'title' => 'Podsjetnik za termin',
-            'message' => "Podsjetnik: Imate zakazan termin za '{$service->name}' kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h",
-            'recipient_id' => $appointment->client_id,
-            'related_id' => $appointment->id,
-        ]);
+        // Only create in-app notification for registered users
+        if ($appointment->client_id && $appointment->client) {
+            Notification::create([
+                'type' => 'appointment_reminder',
+                'title' => 'Podsjetnik za termin',
+                'message' => "Podsjetnik: Imate zakazan termin za '{$service->name}' kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h",
+                'recipient_id' => $appointment->client_id,
+                'related_id' => $appointment->id,
+            ]);
+
+            Log::info("In-app reminder notification created for registered client", [
+                'appointment_id' => $appointment->id,
+                'client_id' => $appointment->client_id,
+            ]);
+        } else {
+            Log::info("Skipping in-app notification for guest booking", [
+                'appointment_id' => $appointment->id,
+                'has_email' => !empty($appointment->client_email),
+            ]);
+        }
     }
 
     /**

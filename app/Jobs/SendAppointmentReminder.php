@@ -41,29 +41,48 @@ class SendAppointmentReminder implements ShouldQueue
             // Load relationships
             $this->appointment->load(['salon', 'service', 'staff', 'client']);
 
-            // Send in-app notification
+            // Send in-app notification (only for registered users)
             $notificationService->sendAppointmentReminderNotification($this->appointment);
 
-            // Send email reminder if client has email
+            // Determine email address - registered user or guest
+            $emailAddress = null;
+            $clientName = null;
+
             if ($this->appointment->client && $this->appointment->client->email) {
-                \Illuminate\Support\Facades\Mail::to($this->appointment->client->email)
+                // Registered user
+                $emailAddress = $this->appointment->client->email;
+                $clientName = $this->appointment->client->name;
+            } elseif ($this->appointment->client_email) {
+                // Guest booking with email
+                $emailAddress = $this->appointment->client_email;
+                $clientName = $this->appointment->client_name ?? 'Gost';
+            }
+
+            // Send email reminder if we have an email address
+            if ($emailAddress) {
+                \Illuminate\Support\Facades\Mail::to($emailAddress)
                     ->send(new \App\Mail\AppointmentReminderMail($this->appointment));
 
                 Log::info('Appointment reminder email sent', [
                     'appointment_id' => $this->appointment->id,
                     'client_id' => $this->appointment->client_id,
-                    'client_email' => $this->appointment->client->email,
+                    'client_email' => $emailAddress,
+                    'is_guest' => !$this->appointment->client_id,
+                    'client_name' => $clientName,
                 ]);
             } else {
-                Log::warning('Appointment reminder email not sent - no client email', [
+                Log::warning('Appointment reminder email not sent - no email address', [
                     'appointment_id' => $this->appointment->id,
                     'client_id' => $this->appointment->client_id,
+                    'is_guest' => !$this->appointment->client_id,
                 ]);
             }
 
-            Log::info('Appointment reminder sent', [
+            Log::info('Appointment reminder processed', [
                 'appointment_id' => $this->appointment->id,
                 'client_id' => $this->appointment->client_id,
+                'has_email' => !empty($emailAddress),
+                'is_guest' => !$this->appointment->client_id,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to send appointment reminder', [

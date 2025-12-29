@@ -26,18 +26,40 @@ class SendAppointmentReminders extends Command
     {
         $tomorrow = Carbon::tomorrow()->format('Y-m-d');
 
+        // Get all confirmed appointments for tomorrow
+        // Include both registered users and guest bookings with email
         $appointments = Appointment::where('date', $tomorrow)
             ->where('status', 'confirmed')
-            ->with(['client', 'salon', 'service'])
+            ->where(function ($query) {
+                // Registered users with client_id
+                $query->whereNotNull('client_id')
+                    // OR guest bookings with email
+                    ->orWhereNotNull('client_email');
+            })
+            ->with(['client', 'salon', 'service', 'staff'])
             ->get();
 
         $count = 0;
+        $skipped = 0;
+
         foreach ($appointments as $appointment) {
-            SendAppointmentReminder::dispatch($appointment);
-            $count++;
+            // Check if we have an email address (registered user or guest)
+            $hasEmail = ($appointment->client && $appointment->client->email)
+                        || !empty($appointment->client_email);
+
+            if ($hasEmail) {
+                SendAppointmentReminder::dispatch($appointment);
+                $count++;
+            } else {
+                $skipped++;
+                $this->warn("Skipped appointment {$appointment->id} - no email address");
+            }
         }
 
         $this->info("Dispatched {$count} reminder notifications for tomorrow's appointments.");
+        if ($skipped > 0) {
+            $this->info("Skipped {$skipped} appointments (no email address).");
+        }
 
         return Command::SUCCESS;
     }

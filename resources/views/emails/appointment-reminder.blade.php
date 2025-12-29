@@ -26,7 +26,7 @@
                         <td style="padding: 40px;">
                             <!-- Greeting -->
                             <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                                Pozdrav{{ $appointment->client ? ' ' . explode(' ', $appointment->client->name)[0] : '' }},
+                                Pozdrav{{ $appointment->client ? ' ' . explode(' ', $appointment->client->name)[0] : ($appointment->client_name ? ' ' . explode(' ', $appointment->client_name)[0] : '') }},
                             </p>
                             <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
                                 Ovo je podsjetnik da imate zakazan termin <strong>{{ $hoursUntil }}</strong>:
