@@ -11,8 +11,10 @@ use App\Models\WidgetAnalytics;
 use App\Models\Appointment;
 use App\Models\Service;
 use App\Models\Staff;
+use App\Services\AppointmentService;
 use App\Services\NotificationService;
 use App\Mail\AppointmentConfirmationMail;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
@@ -499,142 +501,180 @@ class WidgetController extends Controller
         }
 
         try {
-            $salon = Salon::findOrFail($request->input('salon_id'));
-            $staff = Staff::findOrFail($request->input('staff_id'));
-            $dateForDb = Carbon::createFromFormat('d.m.Y', $request->input('date'))->format('Y-m-d');
-            $startTime = $request->input('time');
+            return DB::transaction(function () use ($request, $widgetSetting) {
+                // Lock the staff row to prevent concurrent booking
+                $staff = Staff::where('id', $request->input('staff_id'))
+                    ->with(['breaks', 'vacations', 'salon.salonBreaks', 'salon.salonVacations', 'services'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-            $serviceIds = $request->has('services')
-                ? array_column($request->input('services'), 'id')
-                : [$request->input('service_id')];
+                $salon = Salon::findOrFail($request->input('salon_id'));
+                $dateForDb = Carbon::createFromFormat('d.m.Y', $request->input('date'))->format('Y-m-d');
+                $startTime = $request->input('time');
 
-            // Load all services and calculate total duration and price
-            $services = Service::whereIn('id', $serviceIds)->get();
-            $zeroServices = [];
-            $totalDuration = 0;
-            $totalPrice = 0;
+                $serviceIds = $request->has('services')
+                    ? array_column($request->input('services'), 'id')
+                    : [$request->input('service_id')];
 
-            foreach ($services as $service) {
-                if ($service->duration == 0) {
-                    $zeroServices[] = $service->name;
+                // Load all services and calculate total duration and price
+                $services = Service::whereIn('id', $serviceIds)->get();
+                $zeroServices = [];
+                $totalDuration = 0;
+                $totalPrice = 0;
+
+                foreach ($services as $service) {
+                    if ($service->duration == 0) {
+                        $zeroServices[] = $service->name;
+                    }
+                    $totalDuration += $service->duration;
+                    $totalPrice += $service->discount_price ?? $service->price;
+
+                    // Check if staff can perform this service
+                    if (!$staff->services->contains($service->id)) {
+                        return response()->json([
+                            'error' => "Odabrani frizer ne pruža uslugu: {$service->name}",
+                            'code' => 'STAFF_SERVICE_MISMATCH',
+                        ], 422);
+                    }
                 }
-                $totalDuration += $service->duration;
-                $totalPrice += $service->discount_price ?? $service->price;
-            }
 
-            // Prevent booking if ALL services have zero duration
-            if ($totalDuration == 0) {
-                return response()->json([
-                    'error' => 'Ne možete rezervisati usluge koje nemaju trajanje. Molimo odaberite drugu uslugu ili kontaktirajte salon.',
-                    'code' => 'ZERO_DURATION_SERVICE',
-                    'services' => $zeroServices
-                ], 422);
-            }
+                // Prevent booking if ALL services have zero duration
+                if ($totalDuration == 0) {
+                    return response()->json([
+                        'error' => 'Ne možete rezervisati usluge koje nemaju trajanje. Molimo odaberite drugu uslugu ili kontaktirajte salon.',
+                        'code' => 'ZERO_DURATION_SERVICE',
+                        'services' => $zeroServices
+                    ], 422);
+                }
 
-            // Warn if some services have zero duration (but allow if total > 0)
-            if (!empty($zeroServices)) {
-                Log::warning('Widget booking with zero duration services', [
-                    'services' => $zeroServices,
-                    'total_duration' => $totalDuration,
+                // Warn if some services have zero duration (but allow if total > 0)
+                if (!empty($zeroServices)) {
+                    Log::warning('Widget booking with zero duration services', [
+                        'services' => $zeroServices,
+                        'total_duration' => $totalDuration,
+                        'salon_id' => $request->input('salon_id'),
+                    ]);
+                }
+
+                // Calculate end time based on total duration
+                $startParts = explode(':', $startTime);
+                $startMinutes = (int)$startParts[0] * 60 + (int)$startParts[1];
+                $endMinutes = $startMinutes + $totalDuration;
+                $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
+
+                // CRITICAL: Use AppointmentService to check availability (same as PublicController)
+                // This ensures consistent behavior between widget and web app
+                $appointmentService = app(\App\Services\AppointmentService::class);
+                if (!$appointmentService->isStaffAvailable($staff, $request->input('date'), $startTime, $totalDuration)) {
+                    return response()->json([
+                        'error' => 'Žao nam je, neko se u međuvremenu zakazao u to vrijeme. Molimo odaberite drugo vrijeme.',
+                        'code' => 'TIME_SLOT_TAKEN',
+                        'redirect_to_time' => true
+                    ], 409);
+                }
+
+                $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
+
+                // Find or create guest user if email provided
+                $guestUser = null;
+                if (!empty($request->input('guest_email'))) {
+                    $guestUser = $this->findOrCreateGuestUser([
+                        'name' => $request->input('guest_name'),
+                        'email' => $request->input('guest_email'),
+                        'phone' => $request->input('guest_phone'),
+                    ]);
+                }
+
+                // Create ONE appointment with all services
+                // Use DB::raw() for boolean to ensure PostgreSQL receives actual boolean type
+                $appointment = Appointment::create([
+                    'client_id' => $guestUser?->id,
                     'salon_id' => $request->input('salon_id'),
+                    'staff_id' => $request->input('staff_id'),
+                    'service_id' => count($serviceIds) === 1 ? $serviceIds[0] : null, // For backward compatibility
+                    'service_ids' => $serviceIds, // Store all service IDs
+                    'date' => $dateForDb,
+                    'time' => $startTime,
+                    'end_time' => $endTime,
+                    'status' => $initialStatus,
+                    'client_name' => $request->input('guest_name'),
+                    'client_email' => $request->input('guest_email'),
+                    'client_phone' => $request->input('guest_phone'),
+                    'is_guest' => DB::raw('true'), // Explicit PostgreSQL boolean
+                    'guest_address' => $request->input('guest_address'),
+                    'notes' => $request->input('notes'),
+                    'booking_source' => 'widget',
+                    'total_price' => $totalPrice,
+                    'payment_status' => 'pending',
                 ]);
-            }
 
-            // Calculate end time based on total duration (excluding 0-duration services)
-            $startParts = explode(':', $startTime);
-            $startMinutes = (int)$startParts[0] * 60 + (int)$startParts[1];
-            $endMinutes = $startMinutes + $totalDuration;
-            $endTime = sprintf('%02d:%02d', floor($endMinutes / 60), $endMinutes % 60);
+                // Send notification (single appointment with multiple services)
+                $this->notificationService->sendNewAppointmentNotifications($appointment);
 
-            // CRITICAL: Check for overlapping appointments BEFORE creating
-            $overlappingAppointment = Appointment::where('staff_id', $request->input('staff_id'))
-                ->whereDate('date', $dateForDb)
-                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
-                ->where(function($query) use ($startTime, $endTime) {
-                    // Check if new appointment overlaps with any existing appointment
-                    // Overlap occurs when: new_start < existing_end AND new_end > existing_start
-                    $query->whereRaw("? < end_time AND ? > time", [$startTime, $endTime]);
-                })
-                ->first();
+                // Send confirmation email
+                $guestEmail = $request->input('guest_email');
+                if ($guestEmail) {
+                    try {
+                        Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointment));
+                    } catch (\Exception $e) {
+                        Log::warning('Widget: Failed to send confirmation email: ' . $e->getMessage());
+                    }
+                }
 
-            if ($overlappingAppointment) {
+                $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_BOOKING, $request, [
+                    'appointment_id' => $appointment->id,
+                    'service_ids' => $serviceIds,
+                    'staff_id' => $request->input('staff_id'),
+                    'total_price' => $totalPrice,
+                ], $widgetSetting->id);
+
+                $widgetSetting->increment('total_bookings');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Rezervacija uspješno kreirana',
+                    'appointment' => [
+                        'id' => $appointment->id,
+                        'date' => Carbon::parse($appointment->date)->format('d.m.Y'),
+                        'time' => $appointment->time,
+                        'status' => $appointment->status,
+                    ],
+                    'total_price' => $totalPrice,
+                    'status' => $initialStatus,
+                ], 201);
+            });
+        } catch (QueryException $e) {
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'appointments_no_double_booking')) {
+                Log::warning('Double booking attempt prevented (widget)', [
+                    'guest_name' => $request->input('guest_name'),
+                    'staff_id' => $request->input('staff_id'),
+                    'date' => $request->input('date'),
+                    'time' => $request->input('time'),
+                ]);
+
                 return response()->json([
                     'error' => 'Žao nam je, neko se u međuvremenu zakazao u to vrijeme. Molimo odaberite drugo vrijeme.',
                     'code' => 'TIME_SLOT_TAKEN',
                     'redirect_to_time' => true
-                ], 409); // 409 Conflict
+                ], 409);
             }
 
-            $initialStatus = ($salon->auto_confirm || $staff->auto_confirm) ? 'confirmed' : 'pending';
-
-            // Find or create guest user if email provided
-            $guestUser = null;
-            if (!empty($request->input('guest_email'))) {
-                $guestUser = $this->findOrCreateGuestUser([
-                    'name' => $request->input('guest_name'),
-                    'email' => $request->input('guest_email'),
-                    'phone' => $request->input('guest_phone'),
-                ]);
-            }
-
-            // Create ONE appointment with all services
-            // Use DB::raw() for boolean to ensure PostgreSQL receives actual boolean type
-            $appointment = Appointment::create([
-                'client_id' => $guestUser?->id,
-                'salon_id' => $request->input('salon_id'),
-                'staff_id' => $request->input('staff_id'),
-                'service_id' => count($serviceIds) === 1 ? $serviceIds[0] : null, // For backward compatibility
-                'service_ids' => $serviceIds, // Store all service IDs
-                'date' => $dateForDb,
-                'time' => $startTime,
-                'end_time' => $endTime,
-                'status' => $initialStatus,
-                'client_name' => $request->input('guest_name'),
-                'client_email' => $request->input('guest_email'),
-                'client_phone' => $request->input('guest_phone'),
-                'is_guest' => DB::raw('true'), // Explicit PostgreSQL boolean
-                'guest_address' => $request->input('guest_address'),
-                'notes' => $request->input('notes'),
-                'booking_source' => 'widget',
-                'total_price' => $totalPrice,
-                'payment_status' => 'pending',
+            Log::error('Widget booking database error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            // Send notification (single appointment with multiple services)
-            $this->notificationService->sendNewAppointmentNotifications($appointment);
-
-            // Send confirmation email
-            $guestEmail = $request->input('guest_email');
-            if ($guestEmail) {
-                try {
-                    Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointment));
-                } catch (\Exception $e) {
-                    Log::warning('Widget: Failed to send confirmation email: ' . $e->getMessage());
-                }
+            try {
+                $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_ERROR, $request, [
+                    'error' => 'Database error',
+                    'message' => $e->getMessage(),
+                ], $widgetSetting->id);
+            } catch (\Exception $analyticsError) {
+                Log::warning('Widget analytics log failed: ' . $analyticsError->getMessage());
             }
 
-            $this->logAnalytics($widgetSetting->salon_id, WidgetAnalytics::EVENT_BOOKING, $request, [
-                'appointment_id' => $appointment->id,
-                'service_ids' => $serviceIds,
-                'staff_id' => $request->input('staff_id'),
-                'total_price' => $totalPrice,
-            ], $widgetSetting->id);
-
-            $widgetSetting->increment('total_bookings');
-
             return response()->json([
-                'success' => true,
-                'message' => 'Rezervacija uspješno kreirana',
-                'appointment' => [
-                    'id' => $appointment->id,
-                    'date' => Carbon::parse($appointment->date)->format('d.m.Y'),
-                    'time' => $appointment->time,
-                    'status' => $appointment->status,
-                ],
-                'total_price' => $totalPrice,
-                'status' => $initialStatus,
-            ], 201);
-
+                'error' => 'Greška pri kreiranju rezervacije. Molimo pokušajte ponovo.'
+            ], 500);
         } catch (\Exception $e) {
             Log::error('Widget booking error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
