@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Mail\AppointmentCancelledMail;
 use App\Mail\NewAppointmentNotificationMail;
 use App\Mail\ReviewRequestMail;
+use App\Events\NewNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
@@ -67,7 +68,7 @@ class NotificationService
         // Notify salon owner
         $owner = $salon->owner;
         $guestLabel = $isGuest ? ' (ručno dodano)' : '';
-        Notification::create([
+        $notification = Notification::create([
             'type' => 'new_appointment',
             'title' => 'Novi termin',
             'message' => "{$clientName}{$guestLabel} je zakazao/la termin za " .
@@ -75,7 +76,14 @@ class NotificationService
                 " kod {$staff->name} za {$formattedDate} u {$formattedTime}h",
             'recipient_id' => $owner->id,
             'related_id' => $appointment->id,
+            'data' => [
+                'appointment_date' => $formattedDate,
+                'appointment_time' => $formattedTime,
+            ],
         ]);
+
+        // Broadcast instant notification
+        broadcast(new NewNotification($notification, $owner->id));
 
         // Send email to salon owner
         if ($owner->email && $salon->email_notifications_enabled) {
@@ -88,7 +96,7 @@ class NotificationService
 
         // Notify staff member
         if ($staff->user_id) {
-            Notification::create([
+            $staffNotification = Notification::create([
                 'type' => 'new_appointment',
                 'title' => 'Novi termin',
                 'message' => "{$clientName}{$guestLabel} je zakazao/la termin za " .
@@ -96,7 +104,14 @@ class NotificationService
                     " za {$formattedDate} u {$formattedTime}h",
                 'recipient_id' => $staff->user_id,
                 'related_id' => $appointment->id,
+                'data' => [
+                    'appointment_date' => $formattedDate,
+                    'appointment_time' => $formattedTime,
+                ],
             ]);
+
+            // Broadcast instant notification
+            broadcast(new NewNotification($staffNotification, $staff->user_id));
 
             // Send email to staff member
             $staffUser = User::find($staff->user_id);
@@ -115,7 +130,7 @@ class NotificationService
                 ? 'je automatski potvrđen'
                 : 'čeka potvrdu';
 
-            Notification::create([
+            $clientNotification = Notification::create([
                 'type' => $appointment->status === 'confirmed' ? 'appointment_confirmed' : 'new_appointment',
                 'title' => $appointment->status === 'confirmed' ? 'Termin potvrđen' : 'Termin zakazan',
                 'message' => "Vaš termin za " .
@@ -124,6 +139,9 @@ class NotificationService
                 'recipient_id' => $appointment->client_id,
                 'related_id' => $appointment->id,
             ]);
+
+            // Broadcast instant notification
+            broadcast(new NewNotification($clientNotification, $appointment->client_id));
         }
     }
 
@@ -163,13 +181,16 @@ class NotificationService
         // Notify salon owner
         $owner = $salon->owner;
         $guestLabel = $isGuest ? ' (ručno dodano)' : '';
-        Notification::create([
+        $ownerNotification = Notification::create([
             'type' => 'new_appointment',
             'title' => 'Novi termin',
             'message' => "{$clientName}{$guestLabel} je zakazao/la termin za usluge: {$serviceList} kod {$staff->name} za {$formattedDate} u {$formattedTime}h",
             'recipient_id' => $owner->id,
             'related_id' => $firstAppointment->id,
         ]);
+
+        // Broadcast instant notification
+        broadcast(new NewNotification($ownerNotification, $owner->id));
 
         // Send email to salon owner (with all appointments)
         if ($owner->email && $salon->email_notifications_enabled) {
@@ -182,13 +203,16 @@ class NotificationService
 
         // Notify staff member
         if ($staff->user_id) {
-            Notification::create([
+            $staffNotification = Notification::create([
                 'type' => 'new_appointment',
                 'title' => 'Novi termin',
                 'message' => "{$clientName}{$guestLabel} je zakazao/la termin za usluge: {$serviceList} za {$formattedDate} u {$formattedTime}h",
                 'recipient_id' => $staff->user_id,
                 'related_id' => $firstAppointment->id,
             ]);
+
+            // Broadcast instant notification
+            broadcast(new NewNotification($staffNotification, $staff->user_id));
 
             // Send email to staff member (with all appointments)
             $staffUser = User::find($staff->user_id);
@@ -207,13 +231,16 @@ class NotificationService
                 ? 'je automatski potvrđen'
                 : 'čeka potvrdu';
 
-            Notification::create([
+            $clientNotification = Notification::create([
                 'type' => $firstAppointment->status === 'confirmed' ? 'appointment_confirmed' : 'new_appointment',
                 'title' => $firstAppointment->status === 'confirmed' ? 'Termin potvrđen' : 'Termin zakazan',
                 'message' => "Vaš termin za usluge: {$serviceList} kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h {$statusMessage}",
                 'recipient_id' => $firstAppointment->client_id,
                 'related_id' => $firstAppointment->id,
             ]);
+
+            // Broadcast instant notification
+            broadcast(new NewNotification($clientNotification, $firstAppointment->client_id));
         }
     }
 
@@ -239,23 +266,25 @@ class NotificationService
         if ($client && $appointment->client_id) {
             switch ($appointment->status) {
                 case 'confirmed':
-                    Notification::create([
+                    $confirmedNotification = Notification::create([
                         'type' => 'appointment_confirmed',
                         'title' => 'Termin potvrđen',
                         'message' => "Vaš termin za '{$service->name}' u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h je potvrđen",
                         'recipient_id' => $appointment->client_id,
                         'related_id' => $appointment->id,
                     ]);
+                    broadcast(new NewNotification($confirmedNotification, $appointment->client_id));
                     break;
 
                 case 'cancelled':
-                    Notification::create([
+                    $cancelledNotification = Notification::create([
                         'type' => 'appointment_cancelled',
                         'title' => 'Termin otkazan',
                         'message' => "Vaš termin za '{$service->name}' u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h je otkazan",
                         'recipient_id' => $appointment->client_id,
                         'related_id' => $appointment->id,
                     ]);
+                    broadcast(new NewNotification($cancelledNotification, $appointment->client_id));
 
                     // Send email to client when salon cancels their appointment
                     $client = $appointment->client;
@@ -265,7 +294,7 @@ class NotificationService
                     break;
 
                 case 'completed':
-                    Notification::create([
+                    $completedNotification = Notification::create([
                         'type' => 'appointment_completed',
                         'title' => 'Termin završen',
                         'message' => "Vaš termin za '{$service->name}' kod {$staff->name} u salonu '{$salon->name}' je uspješno završen. Ostavite recenziju!",
@@ -280,6 +309,7 @@ class NotificationService
                             'can_review' => true,
                         ],
                     ]);
+                    broadcast(new NewNotification($completedNotification, $appointment->client_id));
 
                     // Send email to client with review request
                     $this->sendReviewRequestEmail($appointment);
@@ -291,23 +321,25 @@ class NotificationService
         if ($appointment->status === 'cancelled' && $oldStatus !== 'cancelled') {
             $owner = $salon->owner;
 
-            Notification::create([
+            $ownerCancelNotification = Notification::create([
                 'type' => 'appointment_cancelled',
                 'title' => 'Termin otkazan',
                 'message' => "{$clientName} je otkazao/la termin za '{$service->name}' kod {$staff->name} za {$formattedDate} u {$formattedTime}h",
                 'recipient_id' => $owner->id,
                 'related_id' => $appointment->id,
             ]);
+            broadcast(new NewNotification($ownerCancelNotification, $owner->id));
 
             // Also notify staff member
             if ($staff->user_id) {
-                Notification::create([
+                $staffCancelNotification = Notification::create([
                     'type' => 'appointment_cancelled',
                     'title' => 'Termin otkazan',
                     'message' => "{$clientName} je otkazao/la termin za '{$service->name}' za {$formattedDate} u {$formattedTime}h",
                     'recipient_id' => $staff->user_id,
                     'related_id' => $appointment->id,
                 ]);
+                broadcast(new NewNotification($staffCancelNotification, $staff->user_id));
             }
 
             // Send cancellation email to salon owner
@@ -318,13 +350,14 @@ class NotificationService
 
         // Notify staff member about confirmation
         if ($staff->user_id && $appointment->status === 'confirmed' && $oldStatus !== 'confirmed') {
-            Notification::create([
+            $staffConfirmNotification = Notification::create([
                 'type' => 'appointment_confirmed',
                 'title' => 'Termin potvrđen',
                 'message' => "Termin za '{$service->name}' sa klijentom {$clientName} za {$formattedDate} u {$formattedTime}h je potvrđen",
                 'recipient_id' => $staff->user_id,
                 'related_id' => $appointment->id,
             ]);
+            broadcast(new NewNotification($staffConfirmNotification, $staff->user_id));
         }
     }
 
@@ -342,25 +375,27 @@ class NotificationService
         $stars = str_repeat('★', $review->rating) . str_repeat('☆', 5 - $review->rating);
 
         // Notify salon owner
-        Notification::create([
+        $ownerReviewNotification = Notification::create([
             'type' => 'new_review',
             'title' => 'Nova recenzija',
             'message' => "{$client->name} je ostavio/la recenziju {$stars} ({$review->rating}/5) za vaš salon",
             'recipient_id' => $owner->id,
             'related_id' => $review->id,
         ]);
+        broadcast(new NewNotification($ownerReviewNotification, $owner->id));
 
         // Notify staff member
         if ($review->staff_id) {
             $staff = $review->staff;
             if ($staff->user_id) {
-                Notification::create([
+                $staffReviewNotification = Notification::create([
                     'type' => 'new_review',
                     'title' => 'Nova recenzija',
                     'message' => "{$client->name} je ostavio/la recenziju {$stars} ({$review->rating}/5) za vas",
                     'recipient_id' => $staff->user_id,
                     'related_id' => $review->id,
                 ]);
+                broadcast(new NewNotification($staffReviewNotification, $staff->user_id));
             }
         }
     }
@@ -375,34 +410,39 @@ class NotificationService
         $responseText = $review->response['text'] ?? 'Pogledajte odgovor';
         $shortResponse = strlen($responseText) > 50 ? substr($responseText, 0, 50) . '...' : $responseText;
 
-        Notification::create([
+        $responseNotification = Notification::create([
             'type' => 'review_response',
             'title' => 'Odgovor na recenziju',
             'message' => "Salon '{$review->salon->name}' je odgovorio na vašu recenziju: \"{$shortResponse}\"",
             'recipient_id' => $review->client_id,
             'related_id' => $review->id,
         ]);
-    }    /**
+        broadcast(new NewNotification($responseNotification, $review->client_id));
+    }
+
+    /**
      * Send notification for adding a salon to favorites.
      */
     public function sendFavoriteAddedNotification(User $user, Salon $salon): void
     {
-        Notification::create([
+        $userFavoriteNotification = Notification::create([
             'type' => 'favorite_added',
             'title' => 'Salon dodan u omiljene',
             'message' => "Dodali ste '{$salon->name}' u omiljene salone. Pratite specijalne ponude!",
             'recipient_id' => $user->id,
             'related_id' => $salon->id,
         ]);
+        broadcast(new NewNotification($userFavoriteNotification, $user->id));
 
         // Also notify salon owner
-        Notification::create([
+        $ownerFavoriteNotification = Notification::create([
             'type' => 'new_favorite',
             'title' => 'Novi pratilac',
             'message' => "{$user->name} je dodao/la vaš salon u omiljene",
             'recipient_id' => $salon->owner_id,
             'related_id' => $salon->id,
         ]);
+        broadcast(new NewNotification($ownerFavoriteNotification, $salon->owner_id));
     }
 
     /**
@@ -432,13 +472,14 @@ class NotificationService
             default => $status
         };
 
-        Notification::create([
+        $statusNotification = Notification::create([
             'type' => 'salon_status_change',
             'title' => 'Status salona promijenjen',
             'message' => "Vaš salon '{$salon->name}' je {$statusText}",
             'recipient_id' => $salon->owner_id,
             'related_id' => $salon->id,
         ]);
+        broadcast(new NewNotification($statusNotification, $salon->owner_id));
     }
 
     /**
@@ -446,12 +487,13 @@ class NotificationService
      */
     public function sendPasswordResetNotification(User $user, string $newPassword): void
     {
-        Notification::create([
+        $passwordNotification = Notification::create([
             'type' => 'password_reset',
             'title' => 'Lozinka resetovana',
             'message' => "Administrator je resetovao vašu lozinku. Nova privremena lozinka: {$newPassword}. Molimo promijenite je nakon prijave.",
             'recipient_id' => $user->id,
         ]);
+        broadcast(new NewNotification($passwordNotification, $user->id));
     }
 
     /**
@@ -459,12 +501,13 @@ class NotificationService
      */
     public function sendAdminMessageNotification(User $user, string $subject, string $message): void
     {
-        Notification::create([
+        $adminNotification = Notification::create([
             'type' => 'admin_message',
             'title' => $subject,
             'message' => $message,
             'recipient_id' => $user->id,
         ]);
+        broadcast(new NewNotification($adminNotification, $user->id));
     }
 
     /**
@@ -484,13 +527,14 @@ class NotificationService
 
         // Only create in-app notification for registered users
         if ($appointment->client_id && $appointment->client) {
-            Notification::create([
+            $reminderNotification = Notification::create([
                 'type' => 'appointment_reminder',
                 'title' => 'Podsjetnik za termin',
                 'message' => "Podsjetnik: Imate zakazan termin za '{$service->name}' kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h",
                 'recipient_id' => $appointment->client_id,
                 'related_id' => $appointment->id,
             ]);
+            broadcast(new NewNotification($reminderNotification, $appointment->client_id));
 
             Log::info("In-app reminder notification created for registered client", [
                 'appointment_id' => $appointment->id,

@@ -11,6 +11,7 @@
         "laravel/sanctum": "^4.1",
         "laravel/tinker": "^2.10.1",
         "phpoffice/phpspreadsheet": "^5.3",
+        "pusher/pusher-php-server": "^7.2",
         "sentry/sentry-laravel": "^4.20"
     },
     "require-dev": {
