@@ -62,7 +62,7 @@ class WidgetController extends Controller
         }
 
         // Create new guest user
-        // Laravel boolean cast auto-converts true to 1 for SMALLINT columns
+        // Use DB::raw('true') for PostgreSQL BOOLEAN columns
         return \App\Models\User::create([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -70,7 +70,7 @@ class WidgetController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)),
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => true, // Cast converts to 1 for SMALLINT
+            'is_guest' => \Illuminate\Support\Facades\DB::raw('true'),
             'created_via' => 'widget',
         ]);
     }
@@ -598,7 +598,7 @@ class WidgetController extends Controller
                     'client_name' => $request->input('guest_name'),
                     'client_email' => $request->input('guest_email'),
                     'client_phone' => $request->input('guest_phone'),
-                    'is_guest' => true, // Cast converts to 1 for SMALLINT
+                    'is_guest' => \Illuminate\Support\Facades\DB::raw('true'),
                     'guest_address' => $request->input('guest_address'),
                     'notes' => $request->input('notes'),
                     'booking_source' => 'widget',

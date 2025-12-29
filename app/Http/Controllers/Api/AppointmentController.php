@@ -248,7 +248,7 @@ class AppointmentController extends Controller
                     'client_name' => $clientName,
                     'client_email' => $clientEmail,
                     'client_phone' => $clientPhone,
-                    'is_guest' => $isGuest,
+                    'is_guest' => $isGuest ? DB::raw('true') : DB::raw('false'),
                     'guest_address' => $guestAddress,
                     'salon_id' => $salon->id,
                     'staff_id' => $staff->id,

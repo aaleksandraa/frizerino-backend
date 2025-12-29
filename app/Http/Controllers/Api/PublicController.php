@@ -605,7 +605,7 @@ class PublicController extends Controller
                     'client_name' => $request->guest_name,
                     'client_email' => $request->guest_email,
                     'client_phone' => $request->guest_phone,
-                    'is_guest' => true,
+                    'is_guest' => DB::raw('true'),
                     'guest_address' => $request->guest_address,
                     'salon_id' => $salon->id,
                     'staff_id' => $staff->id,
