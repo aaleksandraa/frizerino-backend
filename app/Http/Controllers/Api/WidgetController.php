@@ -625,11 +625,10 @@ class WidgetController extends Controller
                 'message' => 'Rezervacija uspješno kreirana',
                 'appointment' => [
                     'id' => $appointment->id,
-                        'date' => Carbon::parse($apt->date)->format('d.m.Y'),
-                        'time' => $apt->time,
-                        'status' => $apt->status,
-                    ];
-                }, $appointments),
+                    'date' => Carbon::parse($appointment->date)->format('d.m.Y'),
+                    'time' => $appointment->time,
+                    'status' => $appointment->status,
+                ],
                 'total_price' => $totalPrice,
                 'status' => $initialStatus,
             ], 201);
