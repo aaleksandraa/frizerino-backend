@@ -16,26 +16,38 @@ class NewAppointmentNotificationMail extends Mailable implements ShouldQueue
     use Queueable, SerializesModels;
 
     public Appointment $appointment;
+    public ?array $appointments; // For multi-service bookings
     public string $recipientType; // 'salon' or 'staff'
     public string $formattedDate;
     public string $formattedTime;
     public string $endTime;
+    public float $totalPrice;
+    public int $totalDuration;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(Appointment $appointment, string $recipientType = 'salon')
+    public function __construct(Appointment $appointment, string $recipientType = 'salon', ?array $appointments = null)
     {
         $this->appointment = $appointment->load(['salon', 'service', 'staff', 'client']);
         $this->recipientType = $recipientType;
+        $this->appointments = $appointments;
+
+        // If multiple appointments provided, calculate total duration and price
+        if ($appointments && count($appointments) > 1) {
+            $this->totalDuration = array_sum(array_map(fn($apt) => $apt->service->duration, $appointments));
+            $this->totalPrice = array_sum(array_map(fn($apt) => $apt->total_price, $appointments));
+        } else {
+            $this->totalDuration = $appointment->service->duration ?? 60;
+            $this->totalPrice = $appointment->total_price;
+        }
 
         // Parse date and time
         $dateString = $appointment->date instanceof Carbon
             ? $appointment->date->format('Y-m-d')
             : $appointment->date;
         $startDateTime = Carbon::parse($dateString . ' ' . $appointment->time);
-        $duration = $appointment->service->duration ?? 60;
-        $endDateTime = $startDateTime->copy()->addMinutes($duration);
+        $endDateTime = $startDateTime->copy()->addMinutes($this->totalDuration);
 
         $this->formattedDate = $startDateTime->locale('bs')->isoFormat('dddd, D. MMMM YYYY.');
         $this->formattedTime = $startDateTime->format('H:i');

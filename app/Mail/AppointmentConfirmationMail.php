@@ -16,26 +16,38 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
     use Queueable, SerializesModels;
 
     public Appointment $appointment;
+    public ?array $appointments; // For multi-service bookings
     public string $googleCalendarUrl;
     public string $icsContent;
     public string $formattedDate;
     public string $formattedTime;
     public string $endTime;
+    public float $totalPrice;
+    public int $totalDuration;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(Appointment $appointment)
+    public function __construct(Appointment $appointment, ?array $appointments = null)
     {
         $this->appointment = $appointment->load(['salon', 'service', 'staff']);
+        $this->appointments = $appointments;
+
+        // If multiple appointments provided, calculate total duration and price
+        if ($appointments && count($appointments) > 1) {
+            $this->totalDuration = array_sum(array_map(fn($apt) => $apt->service->duration, $appointments));
+            $this->totalPrice = array_sum(array_map(fn($apt) => $apt->total_price, $appointments));
+        } else {
+            $this->totalDuration = $appointment->service->duration ?? 60;
+            $this->totalPrice = $appointment->total_price;
+        }
 
         // Parse date and time - date is already Carbon instance from model cast
         $dateString = $appointment->date instanceof Carbon
             ? $appointment->date->format('Y-m-d')
             : $appointment->date;
         $startDateTime = Carbon::parse($dateString . ' ' . $appointment->time);
-        $duration = $appointment->service->duration ?? 60;
-        $endDateTime = $startDateTime->copy()->addMinutes($duration);
+        $endDateTime = $startDateTime->copy()->addMinutes($this->totalDuration);
 
         $this->formattedDate = $startDateTime->locale('bs')->isoFormat('dddd, D. MMMM YYYY.');
         $this->formattedTime = $startDateTime->format('H:i');
@@ -52,13 +64,24 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
     private function generateGoogleCalendarUrl(Carbon $start, Carbon $end): string
     {
         $salon = $this->appointment->salon;
-        $service = $this->appointment->service;
         $staff = $this->appointment->staff;
 
-        $title = urlencode("Termin: {$service->name} - {$salon->name}");
-        $details = urlencode("Usluga: {$service->name}\nSalon: {$salon->name}" .
-            ($staff ? "\nFrizer: {$staff->name}" : "") .
-            "\n\nRezervisano preko frizerino.com");
+        // Build service list
+        if ($this->appointments && count($this->appointments) > 1) {
+            $serviceNames = array_map(fn($apt) => $apt->service->name, $this->appointments);
+            $serviceList = implode(', ', $serviceNames);
+            $title = urlencode("Termin: {$serviceList} - {$salon->name}");
+            $details = urlencode("Usluge: {$serviceList}\nSalon: {$salon->name}" .
+                ($staff ? "\nFrizer: {$staff->name}" : "") .
+                "\n\nRezervisano preko frizerino.com");
+        } else {
+            $service = $this->appointment->service;
+            $title = urlencode("Termin: {$service->name} - {$salon->name}");
+            $details = urlencode("Usluga: {$service->name}\nSalon: {$salon->name}" .
+                ($staff ? "\nFrizer: {$staff->name}" : "") .
+                "\n\nRezervisano preko frizerino.com");
+        }
+
         $location = urlencode($salon->address . ', ' . $salon->city);
 
         $startFormatted = $start->format('Ymd\THis');
@@ -78,17 +101,28 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
     private function generateIcsContent(Carbon $start, Carbon $end): string
     {
         $salon = $this->appointment->salon;
-        $service = $this->appointment->service;
         $staff = $this->appointment->staff;
+
+        // Build service list
+        if ($this->appointments && count($this->appointments) > 1) {
+            $serviceNames = array_map(fn($apt) => $apt->service->name, $this->appointments);
+            $serviceList = implode(', ', $serviceNames);
+            $summary = "Termin: {$serviceList} - {$salon->name}";
+            $description = "Usluge: {$serviceList}\\nSalon: {$salon->name}" .
+                ($staff ? "\\nFrizer: {$staff->name}" : "") .
+                "\\n\\nRezervisano preko frizerino.com";
+        } else {
+            $service = $this->appointment->service;
+            $summary = "Termin: {$service->name} - {$salon->name}";
+            $description = "Usluga: {$service->name}\\nSalon: {$salon->name}" .
+                ($staff ? "\\nFrizer: {$staff->name}" : "") .
+                "\\n\\nRezervisano preko frizerino.com";
+        }
 
         $uid = uniqid('frizerino-') . '@frizerino.com';
         $now = Carbon::now()->format('Ymd\THis\Z');
         $startFormatted = $start->format('Ymd\THis');
         $endFormatted = $end->format('Ymd\THis');
-
-        $description = "Usluga: {$service->name}\\nSalon: {$salon->name}" .
-            ($staff ? "\\nFrizer: {$staff->name}" : "") .
-            "\\n\\nRezervisano preko frizerino.com";
 
         $location = $salon->address . ', ' . $salon->city;
 
@@ -102,7 +136,7 @@ class AppointmentConfirmationMail extends Mailable implements ShouldQueue
             "DTSTAMP:{$now}\r\n" .
             "DTSTART:{$startFormatted}\r\n" .
             "DTEND:{$endFormatted}\r\n" .
-            "SUMMARY:Termin: {$service->name} - {$salon->name}\r\n" .
+            "SUMMARY:{$summary}\r\n" .
             "DESCRIPTION:{$description}\r\n" .
             "LOCATION:{$location}\r\n" .
             "STATUS:CONFIRMED\r\n" .

@@ -611,8 +611,6 @@ class WidgetController extends Controller
                 $appointments[] = $appointment;
                 $totalPrice += $service->discount_price ?? $service->price;
 
-                $this->notificationService->sendNewAppointmentNotifications($appointment);
-
                 // Only advance time for services with duration > 0
                 // 0-duration services are add-ons that don't take up time slots
                 if ($service->duration > 0) {
@@ -620,10 +618,16 @@ class WidgetController extends Controller
                 }
             }
 
+            // Send grouped notification for all appointments (instead of one per service)
+            if (count($appointments) > 0) {
+                $this->notificationService->sendMultiServiceAppointmentNotifications($appointments);
+            }
+
             $guestEmail = $request->input('guest_email');
             if ($guestEmail && count($appointments) > 0) {
                 try {
-                    Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointments[0]));
+                    // Send grouped email with all appointments
+                    Mail::to($guestEmail)->send(new AppointmentConfirmationMail($appointments[0], $appointments));
                 } catch (\Exception $e) {
                     Log::warning('Widget: Failed to send confirmation email: ' . $e->getMessage());
                 }

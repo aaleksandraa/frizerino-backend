@@ -112,6 +112,96 @@ class NotificationService
     }
 
     /**
+     * Send grouped notifications for multiple appointments (multi-service booking).
+     * This sends ONE notification with all services listed instead of separate notifications.
+     */
+    public function sendMultiServiceAppointmentNotifications(array $appointments): void
+    {
+        if (empty($appointments)) {
+            return;
+        }
+
+        // Load relationships for all appointments
+        foreach ($appointments as $appointment) {
+            $appointment->load(['salon', 'staff', 'service', 'client']);
+        }
+
+        // Use first appointment for common data
+        $firstAppointment = $appointments[0];
+        $formattedDate = $this->formatDate($firstAppointment->date);
+        $formattedTime = $this->formatTime($firstAppointment->time);
+        $salon = $firstAppointment->salon;
+        $client = $firstAppointment->client;
+        $staff = $firstAppointment->staff;
+
+        // Get client name
+        $clientName = $client ? $client->name : ($firstAppointment->client_name ?? 'Gost');
+        $isGuest = $firstAppointment->is_guest || !$client;
+
+        // Build service list
+        $serviceNames = array_map(fn($apt) => $apt->service->name, $appointments);
+        $serviceList = count($serviceNames) > 1
+            ? implode(', ', array_slice($serviceNames, 0, -1)) . ' i ' . end($serviceNames)
+            : $serviceNames[0];
+
+        // Notify salon owner
+        $owner = $salon->owner;
+        $guestLabel = $isGuest ? ' (ručno dodano)' : '';
+        Notification::create([
+            'type' => 'new_appointment',
+            'title' => 'Novi termin',
+            'message' => "{$clientName}{$guestLabel} je zakazao/la termin za usluge: {$serviceList} kod {$staff->name} za {$formattedDate} u {$formattedTime}h",
+            'recipient_id' => $owner->id,
+            'related_id' => $firstAppointment->id,
+        ]);
+
+        // Send email to salon owner (with all appointments)
+        if ($owner->email && $salon->email_notifications_enabled) {
+            try {
+                Mail::to($owner->email)->send(new NewAppointmentNotificationMail($firstAppointment, 'salon', $appointments));
+            } catch (\Exception $e) {
+                Log::warning('Failed to send multi-service appointment email to salon owner: ' . $e->getMessage());
+            }
+        }
+
+        // Notify staff member
+        if ($staff->user_id) {
+            Notification::create([
+                'type' => 'new_appointment',
+                'title' => 'Novi termin',
+                'message' => "{$clientName}{$guestLabel} je zakazao/la termin za usluge: {$serviceList} za {$formattedDate} u {$formattedTime}h",
+                'recipient_id' => $staff->user_id,
+                'related_id' => $firstAppointment->id,
+            ]);
+
+            // Send email to staff member (with all appointments)
+            $staffUser = User::find($staff->user_id);
+            if ($staffUser && $staffUser->email) {
+                try {
+                    Mail::to($staffUser->email)->send(new NewAppointmentNotificationMail($firstAppointment, 'staff', $appointments));
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send multi-service appointment email to staff: ' . $e->getMessage());
+                }
+            }
+        }
+
+        // Only notify client if they are a registered user (not a guest)
+        if ($client && $firstAppointment->client_id) {
+            $statusMessage = $firstAppointment->status === 'confirmed'
+                ? 'je automatski potvrđen'
+                : 'čeka potvrdu';
+
+            Notification::create([
+                'type' => $firstAppointment->status === 'confirmed' ? 'appointment_confirmed' : 'new_appointment',
+                'title' => $firstAppointment->status === 'confirmed' ? 'Termin potvrđen' : 'Termin zakazan',
+                'message' => "Vaš termin za usluge: {$serviceList} kod {$staff->name} u salonu '{$salon->name}' za {$formattedDate} u {$formattedTime}h {$statusMessage}",
+                'recipient_id' => $firstAppointment->client_id,
+                'related_id' => $firstAppointment->id,
+            ]);
+        }
+    }
+
+    /**
      * Send notifications for appointment status change.
      */
     public function sendAppointmentStatusChangeNotifications(Appointment $appointment, string $oldStatus): void

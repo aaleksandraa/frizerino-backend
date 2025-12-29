@@ -52,14 +52,38 @@
                                             </tr>
                                         </table>
 
-                                        <!-- Service -->
+                                        <!-- Service(s) -->
                                         <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
                                             <tr>
-                                                <td style="width: 100px; color: #6b7280; font-size: 14px; vertical-align: top;">Usluga</td>
-                                                <td style="color: #111827; font-size: 15px; font-weight: 600;">
-                                                    {{ $appointment->service->name }}
-                                                    @if($appointment->service->price)
-                                                    <span style="color: #f97316; margin-left: 8px;">{{ number_format($appointment->service->price, 2) }} KM</span>
+                                                <td style="width: 100px; color: #6b7280; font-size: 14px; vertical-align: top;">
+                                                    @if($appointments && count($appointments) > 1)
+                                                    Usluge
+                                                    @else
+                                                    Usluga
+                                                    @endif
+                                                </td>
+                                                <td style="color: #111827; font-size: 15px;">
+                                                    @if($appointments && count($appointments) > 1)
+                                                        @foreach($appointments as $apt)
+                                                        <div style="margin-bottom: 8px;">
+                                                            <span style="font-weight: 600;">{{ $apt->service->name }}</span>
+                                                            @if($apt->service->duration > 0)
+                                                            <span style="color: #6b7280; font-size: 13px;">({{ $apt->service->duration }} min)</span>
+                                                            @endif
+                                                            @if($apt->total_price)
+                                                            <span style="color: #f97316; margin-left: 8px;">{{ number_format($apt->total_price, 2) }} KM</span>
+                                                            @endif
+                                                        </div>
+                                                        @endforeach
+                                                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                                                            <span style="font-weight: 600; color: #6b7280;">Ukupno:</span>
+                                                            <span style="color: #f97316; font-weight: 600; margin-left: 8px;">{{ number_format($totalPrice, 2) }} KM</span>
+                                                        </div>
+                                                    @else
+                                                        <span style="font-weight: 600;">{{ $appointment->service->name }}</span>
+                                                        @if($appointment->service->price)
+                                                        <span style="color: #f97316; margin-left: 8px;">{{ number_format($appointment->service->price, 2) }} KM</span>
+                                                        @endif
                                                     @endif
                                                 </td>
                                             </tr>
@@ -76,7 +100,7 @@
                                         <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; @if($appointment->staff) margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; @endif">
                                             <tr>
                                                 <td style="width: 100px; color: #6b7280; font-size: 14px; vertical-align: top;">Vrijeme</td>
-                                                <td style="color: #111827; font-size: 15px; font-weight: 600;">{{ $formattedTime }} - {{ $endTime }} ({{ $appointment->service->duration ?? 60 }} min)</td>
+                                                <td style="color: #111827; font-size: 15px; font-weight: 600;">{{ $formattedTime }} - {{ $endTime }} ({{ $totalDuration }} min)</td>
                                             </tr>
                                         </table>
 
