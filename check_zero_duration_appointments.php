@@ -1,154 +1,116 @@
 <?php
 
-/**
- * Check for appointments with zero duration services
- */
-
 require __DIR__.'/vendor/autoload.php';
 
 $app = require_once __DIR__.'/bootstrap/app.php';
 $app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
 
-use Illuminate\Support\Facades\DB;
+echo "=== Checking Zero Duration Appointments ===\n\n";
 
-echo "\n";
-echo "========================================\n";
-echo "Zero Duration Appointments Check\n";
-echo "========================================\n\n";
+// Find appointments where end_time = time (zero duration)
+$zeroAppointments = \App\Models\Appointment::whereRaw('end_time = time')
+    ->with('service')
+    ->get();
 
-// 1. Find services with duration = 0
-echo "1. Services with duration = 0:\n";
-echo "----------------------------\n";
+echo "Appointments with zero duration (end_time = time): {$zeroAppointments->count()}\n\n";
 
-$zeroServices = DB::select("
-    SELECT id, name, duration, category, price
-    FROM services
-    WHERE duration = 0
-    ORDER BY name
-");
+if ($zeroAppointments->count() > 0) {
+    echo "⚠️  WARNING: Found appointments with zero duration!\n\n";
 
-if (empty($zeroServices)) {
-    echo "✅ No services with duration = 0\n";
-} else {
-    foreach ($zeroServices as $service) {
-        echo "⚠️  ID {$service->id}: {$service->name} (category: {$service->category}, price: {$service->price})\n";
-    }
-}
-
-echo "\n";
-
-// 2. Find appointments with these services
-echo "2. Appointments with zero duration services:\n";
-echo "----------------------------\n";
-
-$zeroAppointments = DB::select("
-    SELECT
-        a.id,
-        a.date,
-        a.time,
-        a.end_time,
-        a.status,
-        a.client_name,
-        s.name as service_name,
-        s.duration,
-        st.name as staff_name
-    FROM appointments a
-    JOIN services s ON a.service_id = s.id
-    JOIN staff st ON a.staff_id = st.id
-    WHERE s.duration = 0
-    AND a.status IN ('pending', 'confirmed', 'in_progress')
-    ORDER BY a.date DESC, a.time DESC
-    LIMIT 20
-");
-
-if (empty($zeroAppointments)) {
-    echo "✅ No active appointments with zero duration services\n";
-} else {
-    echo "Found " . count($zeroAppointments) . " active appointments:\n\n";
     foreach ($zeroAppointments as $apt) {
-        echo "ID {$apt->id}: {$apt->date} {$apt->time}-{$apt->end_time} | {$apt->client_name} | {$apt->service_name} ({$apt->duration}min) | Staff: {$apt->staff_name} | Status: {$apt->status}\n";
+        echo "ID: {$apt->id}\n";
+        echo "  Service: {$apt->service->name} (duration: {$apt->service->duration} min)\n";
+        echo "  Date: {$apt->date}\n";
+        echo "  Time: {$apt->time} - {$apt->end_time}\n";
+        echo "  Status: {$apt->status}\n";
+        echo "  Client: {$apt->client_name}\n";
+
+        if ($apt->service->duration > 0) {
+            echo "  ❌ ERROR: Service has duration but appointment has zero duration!\n";
+        } else {
+            echo "  ℹ️  INFO: This is a 0-duration add-on service (expected)\n";
+        }
+
+        echo "\n";
     }
+
+    echo "Run 'php fix_zero_duration_appointments.php' to fix these issues.\n";
+} else {
+    echo "✅ No appointments with zero duration found.\n";
+    echo "   All appointments have proper end_time values.\n";
 }
 
-echo "\n";
+echo "\n=== Checking for Potential Double Bookings ===\n\n";
 
-// 3. Check if these appointments are blocking slots
-echo "3. Checking slot blocking:\n";
-echo "----------------------------\n";
+// Find appointments that might cause double booking issues
+$potentialIssues = \App\Models\Appointment::select('staff_id', 'date', 'time', \DB::raw('COUNT(*) as count'))
+    ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+    ->groupBy('staff_id', 'date', 'time')
+    ->having(\DB::raw('COUNT(*)'), '>', 1)
+    ->get();
 
-if (!empty($zeroAppointments)) {
-    $example = $zeroAppointments[0];
-    echo "Example appointment:\n";
-    echo "  Date: {$example->date}\n";
-    echo "  Time: {$example->time}\n";
-    echo "  End time: {$example->end_time}\n";
-    echo "  Duration: {$example->duration} minutes\n";
-    echo "\n";
+if ($potentialIssues->count() > 0) {
+    echo "⚠️  Found {$potentialIssues->count()} time slots with multiple appointments:\n\n";
 
-    if ($example->time === $example->end_time) {
-        echo "⚠️  PROBLEM: Start time = End time (no duration)\n";
-        echo "   This appointment blocks the slot but doesn't reserve any time!\n";
-    } else {
-        echo "✅ Start time ≠ End time (has duration)\n";
+    foreach ($potentialIssues as $issue) {
+        echo "Staff ID: {$issue->staff_id}, Date: {$issue->date}, Time: {$issue->time}\n";
+        echo "  Count: {$issue->count} appointments\n";
+
+        // Get the actual appointments
+        $appointments = \App\Models\Appointment::where('staff_id', $issue->staff_id)
+            ->where('date', $issue->date)
+            ->where('time', $issue->time)
+            ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+            ->with('service')
+            ->get();
+
+        foreach ($appointments as $apt) {
+            echo "    - ID {$apt->id}: {$apt->service->name} ({$apt->service->duration} min) [{$apt->time}-{$apt->end_time}]\n";
+        }
+
+        // Check if any have 0 duration
+        $hasZeroDuration = $appointments->filter(function($apt) {
+            return $apt->service->duration == 0;
+        })->count() > 0;
+
+        if ($hasZeroDuration) {
+            echo "  ℹ️  INFO: This is OK - includes 0-duration add-on services\n";
+        } else {
+            echo "  ❌ ERROR: Multiple appointments with duration at same time!\n";
+        }
+
+        echo "\n";
     }
+} else {
+    echo "✅ No potential double booking issues found.\n";
 }
 
-echo "\n";
+echo "\n=== Checking Constraint ===\n\n";
 
-// 4. Count total zero duration appointments (all statuses)
-echo "4. Total zero duration appointments (all statuses):\n";
-echo "----------------------------\n";
-
-$totalZero = DB::select("
+$constraint = \DB::select("
     SELECT
-        a.status,
-        COUNT(*) as count
-    FROM appointments a
-    JOIN services s ON a.service_id = s.id
-    WHERE s.duration = 0
-    GROUP BY a.status
-    ORDER BY count DESC
+        indexname,
+        indexdef
+    FROM pg_indexes
+    WHERE tablename = 'appointments'
+    AND indexname LIKE '%double_booking%'
 ");
 
-if (empty($totalZero)) {
-    echo "✅ No appointments with zero duration services\n";
+if (empty($constraint)) {
+    echo "❌ No double booking constraint found!\n";
+    echo "   Run this SQL to create it:\n\n";
+    echo "   CREATE UNIQUE INDEX appointments_no_double_booking\n";
+    echo "   ON appointments (staff_id, date, time)\n";
+    echo "   WHERE status IN ('pending', 'confirmed', 'in_progress');\n";
 } else {
-    foreach ($totalZero as $stat) {
-        echo "{$stat->status}: {$stat->count} appointments\n";
+    echo "✅ Double booking constraint exists:\n";
+    foreach ($constraint as $c) {
+        echo "   {$c->indexname}\n";
+        echo "   {$c->indexdef}\n";
     }
 }
 
+echo "\n=== Summary ===\n";
+echo "Zero duration appointments: {$zeroAppointments->count()}\n";
+echo "Potential double bookings: {$potentialIssues->count()}\n";
 echo "\n";
-
-// 5. Recommendations
-echo "========================================\n";
-echo "RECOMMENDATIONS\n";
-echo "========================================\n\n";
-
-if (!empty($zeroServices)) {
-    echo "❌ PROBLEM: Found " . count($zeroServices) . " services with duration = 0\n\n";
-
-    echo "Solutions:\n";
-    echo "1. PREVENT booking zero-duration services alone:\n";
-    echo "   - Add validation in booking endpoints\n";
-    echo "   - Only allow as part of multi-service booking\n\n";
-
-    echo "2. FIX existing appointments:\n";
-    echo "   - Option A: Cancel them (if they're mistakes)\n";
-    echo "   - Option B: Set minimum duration (e.g., 5 minutes)\n";
-    echo "   - Option C: Mark as completed if they're old\n\n";
-
-    echo "3. UPDATE services:\n";
-    echo "   - Set minimum duration (e.g., 5 minutes)\n";
-    echo "   - Or mark them as 'addon_only' (can't be booked alone)\n\n";
-}
-
-echo "Next steps:\n";
-echo "1. Review zero-duration services\n";
-echo "2. Decide: Cancel, fix duration, or mark as addon-only\n";
-echo "3. Add validation to prevent future bookings\n";
-echo "4. Fix existing appointments\n";
-
-echo "\n========================================\n";
-echo "CHECK COMPLETE\n";
-echo "========================================\n\n";

@@ -581,6 +581,8 @@ class WidgetController extends Controller
             foreach ($serviceIds as $serviceId) {
                 $service = Service::findOrFail($serviceId);
 
+                // For 0-duration services (add-ons), use the same time as current appointment
+                // but don't advance the currentTime (they don't take up time slots)
                 $timeParts = explode(':', $currentTime);
                 $currentMinutes = (int)$timeParts[0] * 60 + (int)$timeParts[1];
                 $endMinutes = $currentMinutes + $service->duration;
@@ -610,7 +612,12 @@ class WidgetController extends Controller
                 $totalPrice += $service->discount_price ?? $service->price;
 
                 $this->notificationService->sendNewAppointmentNotifications($appointment);
-                $currentTime = $endTime;
+
+                // Only advance time for services with duration > 0
+                // 0-duration services are add-ons that don't take up time slots
+                if ($service->duration > 0) {
+                    $currentTime = $endTime;
+                }
             }
 
             $guestEmail = $request->input('guest_email');
