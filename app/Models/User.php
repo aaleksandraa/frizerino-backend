@@ -52,7 +52,8 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        'is_guest' => 'boolean', // Laravel auto-converts SMALLINT 0/1 to boolean
+        // Removed 'is_guest' => 'boolean' cast - PostgreSQL handles boolean natively
+        // Laravel's boolean cast converts true/false to 1/0 which causes type mismatch
     ];
 
     /**

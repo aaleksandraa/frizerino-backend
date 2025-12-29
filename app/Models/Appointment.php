@@ -48,7 +48,8 @@ class Appointment extends Model
     protected $casts = [
         'date' => 'date',
         'total_price' => 'float',
-        'is_guest' => 'boolean',
+        // Removed 'is_guest' => 'boolean' cast - PostgreSQL handles boolean natively
+        // Laravel's boolean cast converts true/false to 1/0 which causes type mismatch
         'service_ids' => 'array', // Cast JSON to array
     ];
 
