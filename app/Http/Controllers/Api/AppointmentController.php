@@ -19,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -77,7 +78,7 @@ class AppointmentController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)), // Random password
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => true, // Boolean for PostgreSQL boolean type
+            'is_guest' => DB::raw('true'), // Explicit PostgreSQL boolean
             'created_via' => 'booking',
         ]);
     }
@@ -267,7 +268,7 @@ class AppointmentController extends Controller
                     'client_name' => $clientName,
                     'client_email' => $clientEmail,
                     'client_phone' => $clientPhone,
-                    'is_guest' => $isGuest ? true : false, // Boolean for PostgreSQL boolean type
+                    'is_guest' => $isGuest ? DB::raw('true') : DB::raw('false'), // Explicit PostgreSQL boolean
                     'guest_address' => $guestAddress,
                     'salon_id' => $salon->id,
                     'staff_id' => $staff->id,

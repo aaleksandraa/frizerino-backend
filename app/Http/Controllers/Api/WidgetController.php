@@ -16,6 +16,7 @@ use App\Mail\AppointmentConfirmationMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class WidgetController extends Controller
@@ -70,7 +71,7 @@ class WidgetController extends Controller
             'password' => bcrypt(\Illuminate\Support\Str::random(32)),
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => true, // Boolean for PostgreSQL boolean type
+            'is_guest' => DB::raw('true'), // Explicit PostgreSQL boolean
             'created_via' => 'widget',
         ]);
     }
@@ -577,6 +578,7 @@ class WidgetController extends Controller
             }
 
             // Create ONE appointment with all services
+            // Use DB::raw() for boolean to ensure PostgreSQL receives actual boolean type
             $appointment = Appointment::create([
                 'client_id' => $guestUser?->id,
                 'salon_id' => $request->input('salon_id'),
@@ -590,7 +592,7 @@ class WidgetController extends Controller
                 'client_name' => $request->input('guest_name'),
                 'client_email' => $request->input('guest_email'),
                 'client_phone' => $request->input('guest_phone'),
-                'is_guest' => true, // Boolean for PostgreSQL boolean type
+                'is_guest' => DB::raw('true'), // Explicit PostgreSQL boolean
                 'guest_address' => $request->input('guest_address'),
                 'notes' => $request->input('notes'),
                 'booking_source' => 'widget',

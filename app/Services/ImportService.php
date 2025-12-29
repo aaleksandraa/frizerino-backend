@@ -348,7 +348,7 @@ class ImportService
             'password' => bcrypt(Str::random(32)), // Random password for guest users
             'email_verified_at' => null,
             'role' => 'klijent',
-            'is_guest' => true, // Boolean for PostgreSQL boolean type
+            'is_guest' => DB::raw('true'), // Explicit PostgreSQL boolean
             'created_via' => 'import',
         ]);
     }
