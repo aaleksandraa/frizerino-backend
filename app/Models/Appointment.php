@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Appointment extends Model
 {
@@ -48,8 +49,7 @@ class Appointment extends Model
     protected $casts = [
         'date' => 'date',
         'total_price' => 'float',
-        // Removed 'is_guest' => 'boolean' cast - PostgreSQL handles boolean natively
-        // Laravel's boolean cast converts true/false to 1/0 which causes type mismatch
+        'is_guest' => 'boolean', // Keep cast for reading from database
         'service_ids' => 'array', // Cast JSON to array
     ];
 
